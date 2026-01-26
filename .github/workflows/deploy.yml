@@ -40,7 +40,7 @@ jobs:
         env:
           MY_SITE_PASS: ${{ secrets.SITE_PASSWORD }}
         run: |
-          npx staticrypt dist/index.html "$MY_SITE_PASS" -d dist/ --short
+          run: npx staticrypt dist/index.html -p "${{ secrets.SITE_PASSWORD }}" -d dist/ --short
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
