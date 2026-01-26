@@ -50,3 +50,37 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      # --- START OF STATICRYPT STEP ---
+      - name: Encrypt with StatiCrypt
+        run: |
+          npx staticrypt dist/index.html "${{ secrets.SITE_PASSWORD }}" -d dist/ --short
+        # This takes your index.html, encrypts it, and overwrites the original in the dist folder.
+      # --- END OF STATICRYPT STEP ---
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
