@@ -36,10 +36,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Encrypt with StatiCrypt
+      - name: Encrypt  with StatiCrypt
+        env:
+          MY_SITE_PASS: ${{ secrets.SITE_PASSWORD }}
         run: |
-          npx staticrypt dist/index.html "${{ secrets.SITE_PASSWORD }}" -d dist/ --short
-
+          npx staticrypt dist/index.html "$MY_SITE_PASS" -d dist/ --short
+      
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
