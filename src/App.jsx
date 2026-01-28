@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import ChildrenTab from './components/ChildrenTab'
+import EmployeesTab from './components/EmployeesTab'
 import SettingsTab from './components/SettingsTab'
 import { getAgeGroups, saveAgeGroups } from './utils/storage'
 
@@ -13,9 +14,9 @@ function App() {
     if (loadedGroups.length === 0) {
       // Set default age groups
       const defaultGroups = [
-        { id: '1', name: 'Infants', minAge: 5, maxAge: 10, label: '5-10 months', maxCapacity: 10 },
-        { id: '2', name: 'Toddlers', minAge: 11, maxAge: 15, label: '11-15 months', maxCapacity: 12 },
-        { id: '3', name: 'Preschoolers', minAge: 18, maxAge: 30, label: '18-30 months', maxCapacity: 15 }
+        { id: '1', name: 'Infants', minAge: 5, maxAge: 10, label: '5-10 months', maxCapacity: 10, ratio: 4 },
+        { id: '2', name: 'Toddlers', minAge: 11, maxAge: 15, label: '11-15 months', maxCapacity: 12, ratio: 6 },
+        { id: '3', name: 'Preschoolers', minAge: 18, maxAge: 30, label: '18-30 months', maxCapacity: 15, ratio: 8 }
       ]
       saveAgeGroups(defaultGroups)
       setAgeGroups(defaultGroups)
@@ -31,6 +32,7 @@ function App() {
 
   const tabs = [
     { id: 'children', label: 'Children' },
+    { id: 'employees', label: 'Employees' },
     { id: 'team', label: 'Team' },
     { id: 'schedule', label: 'Schedule' },
     { id: 'settings', label: 'Settings' }
@@ -68,6 +70,9 @@ function App() {
       <div className="tab-content">
         {activeTab === 'children' && (
           <ChildrenTab ageGroups={ageGroups} />
+        )}
+        {activeTab === 'employees' && (
+          <EmployeesTab />
         )}
         {activeTab === 'team' && (
           <div className="empty-state">

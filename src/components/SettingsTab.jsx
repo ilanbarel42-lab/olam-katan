@@ -6,16 +6,19 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
   const [newMinAge, setNewMinAge] = useState('')
   const [newMaxAge, setNewMaxAge] = useState('')
   const [newMaxCapacity, setNewMaxCapacity] = useState('')
+  const [newRatio, setNewRatio] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
   const [editMinAge, setEditMinAge] = useState('')
   const [editMaxAge, setEditMaxAge] = useState('')
   const [editMaxCapacity, setEditMaxCapacity] = useState('')
+  const [editRatio, setEditRatio] = useState('')
 
   const handleAddGroup = () => {
     const minAge = parseInt(newMinAge, 10)
     const maxAge = parseInt(newMaxAge, 10)
     const maxCapacity = parseInt(newMaxCapacity, 10)
+    const ratio = parseFloat(newRatio)
     
     if (!newName.trim()) {
       alert('Please enter a group name')
@@ -32,13 +35,19 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
       return
     }
     
+    if (isNaN(ratio) || ratio <= 0) {
+      alert('Please enter a valid regulation ratio (children per employee, must be > 0)')
+      return
+    }
+    
     const newGroup = {
       id: Date.now().toString(),
       name: newName.trim(),
       minAge,
       maxAge,
       label: `${minAge}-${maxAge} months`,
-      maxCapacity
+      maxCapacity,
+      ratio
     }
     
     const updatedGroups = [...ageGroups, newGroup].sort((a, b) => a.minAge - b.minAge)
@@ -48,6 +57,7 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
     setNewMinAge('')
     setNewMaxAge('')
     setNewMaxCapacity('')
+    setNewRatio('')
   }
 
   const handleDeleteGroup = (groupId) => {
@@ -71,12 +81,18 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
     setEditMinAge(group.minAge.toString())
     setEditMaxAge(group.maxAge.toString())
     setEditMaxCapacity((group.maxCapacity || 10).toString())
+    setEditRatio(
+      group.ratio !== undefined && group.ratio !== null
+        ? group.ratio.toString()
+        : ''
+    )
   }
 
   const handleSaveEdit = (groupId) => {
     const minAge = parseInt(editMinAge, 10)
     const maxAge = parseInt(editMaxAge, 10)
     const maxCapacity = parseInt(editMaxCapacity, 10)
+    const ratio = parseFloat(editRatio)
     
     if (!editName.trim()) {
       alert('Please enter a group name')
@@ -93,6 +109,11 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
       return
     }
     
+    if (isNaN(ratio) || ratio <= 0) {
+      alert('Please enter a valid regulation ratio (children per employee, must be > 0)')
+      return
+    }
+    
     const updatedGroups = ageGroups.map(group => {
       if (group.id === groupId) {
         return {
@@ -101,7 +122,8 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
           minAge,
           maxAge,
           label: `${minAge}-${maxAge} months`,
-          maxCapacity
+          maxCapacity,
+          ratio
         }
       }
       return group
@@ -113,6 +135,7 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
     setEditMinAge('')
     setEditMaxAge('')
     setEditMaxCapacity('')
+    setEditRatio('')
   }
 
   const handleCancelEdit = () => {
@@ -121,6 +144,7 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
     setEditMinAge('')
     setEditMaxAge('')
     setEditMaxCapacity('')
+    setEditRatio('')
   }
 
   const handleMaxCapacityChange = (groupId, newMaxCapacity) => {
@@ -189,6 +213,16 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                       style={{ width: '80px', padding: '8px' }}
                       min="1"
                     />
+                    <span style={{ marginRight: '20px' }}>Ratio (children / employee):</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editRatio}
+                      onChange={(e) => setEditRatio(e.target.value)}
+                      placeholder="e.g., 6"
+                      style={{ width: '80px', padding: '8px' }}
+                      min="0.1"
+                    />
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button
@@ -212,7 +246,7 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                       {group.name || 'Unnamed Group'}
                     </div>
                     <div className="range" style={{ color: '#666', marginBottom: '5px', fontFamily: 'Assistant, sans-serif' }}>
-                      {group.label} • Max Capacity: {group.maxCapacity || 'Not set'}
+                      {group.label} • Max Capacity: {group.maxCapacity || 'Not set'} • Ratio: {group.ratio || 'Not set'}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -284,6 +318,17 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                 onChange={(e) => setNewMaxCapacity(e.target.value)}
                 placeholder="e.g., 10"
                 min="1"
+              />
+            </div>
+            <div className="form-group">
+              <label>Regulation Ratio (children / employee)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={newRatio}
+                onChange={(e) => setNewRatio(e.target.value)}
+                placeholder="e.g., 6"
+                min="0.1"
               />
             </div>
           </div>

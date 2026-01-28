@@ -4,7 +4,8 @@
 
 const STORAGE_KEYS = {
   CHILDREN: 'olam-katan-children',
-  AGE_GROUPS: 'olam-katan-age-groups'
+  AGE_GROUPS: 'olam-katan-age-groups',
+  EMPLOYEES: 'olam-katan-employees'
 }
 
 export const getChildren = () => {
@@ -40,5 +41,23 @@ export const saveAgeGroups = (ageGroups) => {
     localStorage.setItem(STORAGE_KEYS.AGE_GROUPS, JSON.stringify(ageGroups))
   } catch (error) {
     console.error('Error saving age groups:', error)
+  }
+}
+
+export const getEmployees = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.EMPLOYEES)
+    return stored ? JSON.parse(stored) : []
+  } catch (error) {
+    console.error('Error loading employees:', error)
+    return []
+  }
+}
+
+export const saveEmployees = (employees) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees))
+  } catch (error) {
+    console.error('Error saving employees:', error)
   }
 }
