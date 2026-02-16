@@ -260,11 +260,15 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                   </div>
                   <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: '600' }}>{t.staffingMinLabel}:</span>
-                    <input type="number" value={editMinLead} onChange={(e) => setEditMinLead(e.target.value)} placeholder={t.leadShort} style={{ width: '60px', padding: '8px' }} min="0" />
-                    <input type="number" value={editMinAssistant} onChange={(e) => setEditMinAssistant(e.target.value)} placeholder={t.asstShort} style={{ width: '60px', padding: '8px' }} min="0" />
+                    <span>{t.lead}:</span>
+                    <input type="number" value={editMinLead} onChange={(e) => setEditMinLead(e.target.value)} style={{ width: '60px', padding: '8px' }} min="0" />
+                    <span>{t.assistant}:</span>
+                    <input type="number" value={editMinAssistant} onChange={(e) => setEditMinAssistant(e.target.value)} style={{ width: '60px', padding: '8px' }} min="0" />
                     <span style={{ fontWeight: '600', marginRight: '10px' }}>{t.optimalLabel}:</span>
-                    <input type="number" value={editOptLead} onChange={(e) => setEditOptLead(e.target.value)} placeholder={t.leadShort} style={{ width: '60px', padding: '8px' }} min="0" />
-                    <input type="number" value={editOptAssistant} onChange={(e) => setEditOptAssistant(e.target.value)} placeholder={t.asstShort} style={{ width: '60px', padding: '8px' }} min="0" />
+                    <span>{t.lead}:</span>
+                    <input type="number" value={editOptLead} onChange={(e) => setEditOptLead(e.target.value)} style={{ width: '60px', padding: '8px' }} min="0" />
+                    <span>{t.assistant}:</span>
+                    <input type="number" value={editOptAssistant} onChange={(e) => setEditOptAssistant(e.target.value)} style={{ width: '60px', padding: '8px' }} min="0" />
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button
@@ -380,13 +384,13 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
               />
             </div>
           </div>
-          <div className="form-row" style={{ marginBottom: '15px' }}>
-            <span style={{ fontWeight: '600', marginRight: '10px' }}>{t.staffingMinLabel}:</span>
-            <input type="number" value={newMinLead} onChange={(e) => setNewMinLead(e.target.value)} placeholder={t.leadShort} min="0" style={{ width: '70px' }} />
-            <input type="number" value={newMinAssistant} onChange={(e) => setNewMinAssistant(e.target.value)} placeholder={t.asstShort} min="0" style={{ width: '70px' }} />
+          <div className="form-row" style={{ marginBottom: '15px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            <span style={{ fontWeight: '600', marginLeft: '10px' }}>{t.staffingMinLabel}:</span>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{t.lead}: <input type="number" value={newMinLead} onChange={(e) => setNewMinLead(e.target.value)} min="0" style={{ width: '60px' }} /></label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{t.assistant}: <input type="number" value={newMinAssistant} onChange={(e) => setNewMinAssistant(e.target.value)} min="0" style={{ width: '60px' }} /></label>
             <span style={{ fontWeight: '600', marginRight: '10px' }}>{t.optimalLabel}:</span>
-            <input type="number" value={newOptLead} onChange={(e) => setNewOptLead(e.target.value)} placeholder={t.leadShort} min="0" style={{ width: '70px' }} />
-            <input type="number" value={newOptAssistant} onChange={(e) => setNewOptAssistant(e.target.value)} placeholder={t.asstShort} min="0" style={{ width: '70px' }} />
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{t.lead}: <input type="number" value={newOptLead} onChange={(e) => setNewOptLead(e.target.value)} min="0" style={{ width: '60px' }} /></label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>{t.assistant}: <input type="number" value={newOptAssistant} onChange={(e) => setNewOptAssistant(e.target.value)} min="0" style={{ width: '60px' }} /></label>
           </div>
           <button
             className="btn btn-primary"

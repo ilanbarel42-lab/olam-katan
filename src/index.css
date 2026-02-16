@@ -621,7 +621,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 /* Settings Page */
 .settings-container {
-  max-width: 800px;
+  max-width: 1000px;
 }
 
 .settings-section {
@@ -659,6 +659,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   font-weight: 600;
   color: var(--color-text);
   font-family: var(--font-heading);
+  line-height: 1.5;
+  word-wrap: break-word;
 }
 
 /* Buttons */
