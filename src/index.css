@@ -64,6 +64,24 @@ body {
   background-attachment: fixed;
 }
 
+/* App layout: fixed header + scrollable content */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* Sticky header: brand + tabs fixed at top, always visible when scrolling */
+.app-header-sticky {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  flex-shrink: 0;
+}
+
 /* RTL Support */
 [dir="rtl"] {
   direction: rtl;
@@ -83,7 +101,7 @@ h2 { font-size: 2rem; }
 h3 { font-size: 1.75rem; }
 h4 { font-size: 1.5rem; }
 
-/* Brand Header */
+/* Brand Header - stays at top when content scrolls */
 .brand-header {
   background: var(--color-primary);
   padding: 30px 40px;
@@ -91,6 +109,7 @@ h4 { font-size: 1.5rem; }
   overflow: hidden;
   box-shadow: var(--shadow-lg);
   margin-bottom: 0;
+  flex-shrink: 0;
 }
 
 .brand-header-content {
@@ -172,11 +191,12 @@ h4 { font-size: 1.5rem; }
   }
 }
 
-/* Tab Navigation */
+/* Tab Navigation - stays at top when content scrolls */
 .tab-container {
   background-color: var(--color-white);
   box-shadow: var(--shadow-md);
   border-radius: 0;
+  flex-shrink: 0;
 }
 
 .tab-nav {
@@ -211,10 +231,15 @@ h4 { font-size: 1.5rem; }
   background-color: rgba(196, 126, 206, 0.05);
 }
 
+/* Tab content - scrollable area, offset to account for fixed header */
 .tab-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 30px;
+  padding-top: 200px; /* space for fixed header (brand + tabs) */
   background-color: transparent;
-  min-height: calc(100vh - 200px);
 }
 
 /* Age Group Widget */
@@ -678,6 +703,26 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   cursor: grabbing;
 }
 
+/* Schedule Tab - Person dropdown scrollable list */
+.schedule-person-dropdown-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary) var(--color-gray-light);
+}
+.schedule-person-dropdown-list::-webkit-scrollbar {
+  width: 10px;
+}
+.schedule-person-dropdown-list::-webkit-scrollbar-track {
+  background: var(--color-gray-light);
+  border-radius: 4px;
+}
+.schedule-person-dropdown-list::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+.schedule-person-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-dark);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .brand-header {
@@ -698,6 +743,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   
   .tab-content {
     padding: 15px;
+    padding-top: 180px; /* keep space for fixed header on smaller screens */
   }
   
   .age-group-stats {

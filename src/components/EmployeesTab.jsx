@@ -26,22 +26,10 @@ const WEEK_DAYS = [
 
 const HOURS = Array.from({ length: 11 }, (_, i) => 7 + i) // 7..17
 
-function EmployeesTab() {
+function EmployeesTab({ onEmployeesChange }) {
   const [employees, setEmployees] = useState([])
   const [ageGroups, setAgeGroups] = useState([])
   const [children, setChildren] = useState([])
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [formErrors, setFormErrors] = useState({})
-  const [formData, setFormData] = useState({
-    workStart: 7,
-    workEnd: 17,
-    name: '',
-    phone: '',
-    status: 'permanent',
-    freeDay: 'friday',
-    groupId: '',
-    role: 'assistant'
-  })
 
   useEffect(() => {
     setEmployees(getEmployees())
@@ -59,6 +47,7 @@ function EmployeesTab() {
     const updated = employees.map(emp => (emp.id === employeeId ? { ...emp, [field]: value } : emp))
     setEmployees(updated)
     saveEmployees(updated)
+    onEmployeesChange?.()
   }
 
   const handleDeleteEmployee = (employeeId, employeeName) => {
@@ -67,6 +56,7 @@ function EmployeesTab() {
       const updated = employees.filter(emp => emp.id !== employeeId)
       setEmployees(updated)
       saveEmployees(updated)
+      onEmployeesChange?.()
     }
   }
 
@@ -86,97 +76,7 @@ function EmployeesTab() {
     const updated = [...employees, newEmployee]
     setEmployees(updated)
     saveEmployees(updated)
-  }
-
-  const validateForm = () => {
-    const errors = {}
-
-    const start = Number(formData.workStart)
-    const end = Number(formData.workEnd)
-    if (!Number.isFinite(start) || start < 7 || start > 17) {
-      errors.workStart = 'Work start must be between 7 and 17'
-    }
-    if (!Number.isFinite(end) || end < 7 || end > 17) {
-      errors.workEnd = 'Work end must be between 7 and 17'
-    }
-    if (Number.isFinite(start) && Number.isFinite(end) && start >= end) {
-      errors.workEnd = 'Work end must be later than start'
-    }
-
-    if (!formData.name.trim()) {
-      errors.name = 'Name is required'
-    }
-
-    if (!formData.freeDay) {
-      errors.freeDay = 'Free day is required'
-    }
-
-    return errors
-  }
-
-  const handleFormChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-    if (formErrors[field]) {
-      setFormErrors(prev => {
-        const next = { ...prev }
-        delete next[field]
-        return next
-      })
-    }
-  }
-
-  const handleSubmitForm = (e) => {
-    e.preventDefault()
-
-    const errors = validateForm()
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      return
-    }
-
-    const newEmployee = {
-      id: Date.now().toString(),
-      workStart: Number(formData.workStart),
-      workEnd: Number(formData.workEnd),
-      name: formData.name.trim(),
-      phone: formData.phone.trim(),
-      status: formData.status,
-      freeDay: formData.freeDay,
-      groupId: formData.groupId,
-      role: formData.role
-    }
-
-    const updated = [...employees, newEmployee]
-    setEmployees(updated)
-    saveEmployees(updated)
-
-    setFormData({
-      workStart: 7,
-      workEnd: 17,
-      name: '',
-      phone: '',
-      status: 'permanent',
-      freeDay: 'friday',
-      groupId: '',
-      role: 'assistant'
-    })
-    setFormErrors({})
-    setShowAddForm(false)
-  }
-
-  const handleCancelForm = () => {
-    setFormData({
-      workStart: 7,
-      workEnd: 17,
-      name: '',
-      phone: '',
-      status: 'permanent',
-      freeDay: 'friday',
-      groupId: '',
-      role: 'assistant'
-    })
-    setFormErrors({})
-    setShowAddForm(false)
+    onEmployeesChange?.()
   }
 
   const clampHour = (n) => {
@@ -198,6 +98,7 @@ function EmployeesTab() {
     })
     setEmployees(updated)
     saveEmployees(updated)
+    onEmployeesChange?.()
   }
 
   const handleRowEndChange = (employeeId, newEnd) => {
@@ -213,6 +114,7 @@ function EmployeesTab() {
     })
     setEmployees(updated)
     saveEmployees(updated)
+    onEmployeesChange?.()
   }
 
   // Compute per-group staffing and ratio info
@@ -321,173 +223,6 @@ function EmployeesTab() {
         </div>
       </div>
 
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-        {!showAddForm ? (
-          <>
-            <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
-              Add New Employee
-            </button>
-            <button className="btn btn-secondary" onClick={handleAddRow}>
-              + Add Row in Table
-            </button>
-          </>
-        ) : (
-          <div
-            className="add-child-form"
-            style={{
-              background: '#fff',
-              padding: '30px',
-              borderRadius: '16px',
-              boxShadow: '0 4px 12px rgba(196, 126, 206, 0.12)',
-              marginBottom: '20px',
-              width: '100%'
-            }}
-          >
-            <h3 style={{ marginBottom: '20px', color: '#C47ECE', fontWeight: '800', fontFamily: 'Nunito, sans-serif' }}>
-              Add New Employee
-            </h3>
-            <form onSubmit={handleSubmitForm}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>
-                    Work Start (7-17) <span style={{ color: 'red' }}>*</span>
-                  </label>
-                  <select
-                    className={`editable-select ${formErrors.workStart ? 'error' : ''}`}
-                    value={formData.workStart}
-                    onChange={(e) => handleFormChange('workStart', Number(e.target.value))}
-                  >
-                    {HOURS.map(h => (
-                      <option key={h} value={h}>
-                        {h}:00
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.workStart && <span style={{ color: 'red', fontSize: '12px' }}>{formErrors.workStart}</span>}
-                </div>
-
-                <div className="form-group">
-                  <label>
-                    Work End (7-17) <span style={{ color: 'red' }}>*</span>
-                  </label>
-                  <select
-                    className={`editable-select ${formErrors.workEnd ? 'error' : ''}`}
-                    value={formData.workEnd}
-                    onChange={(e) => handleFormChange('workEnd', Number(e.target.value))}
-                  >
-                    {HOURS.map(h => (
-                      <option key={h} value={h}>
-                        {h}:00
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.workEnd && <span style={{ color: 'red', fontSize: '12px' }}>{formErrors.workEnd}</span>}
-                </div>
-
-                <div className="form-group" style={{ flex: 2 }}>
-                  <label>
-                    Name <span style={{ color: 'red' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => handleFormChange('name', e.target.value)}
-                    placeholder="Enter employee name"
-                    className={formErrors.name ? 'error' : ''}
-                  />
-                  {formErrors.name && <span style={{ color: 'red', fontSize: '12px' }}>{formErrors.name}</span>}
-                </div>
-
-                <div className="form-group">
-                  <label>Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => handleFormChange('phone', e.target.value)}
-                    placeholder="Enter phone"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Status</label>
-                  <select
-                    className="editable-select"
-                    value={formData.status}
-                    onChange={(e) => handleFormChange('status', e.target.value)}
-                  >
-                    {EMPLOYMENT_STATUSES.map(s => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Role</label>
-                  <select
-                    className="editable-select"
-                    value={formData.role}
-                    onChange={(e) => handleFormChange('role', e.target.value)}
-                  >
-                    {EMPLOYEE_ROLES.map(r => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Group</label>
-                  <select
-                    className="editable-select"
-                    value={formData.groupId}
-                    onChange={(e) => handleFormChange('groupId', e.target.value)}
-                  >
-                    <option value="">Select group</option>
-                    {ageGroups.map(group => (
-                      <option key={group.id} value={group.id}>
-                        {group.name || group.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>
-                    Free Day <span style={{ color: 'red' }}>*</span>
-                  </label>
-                  <select
-                    className={`editable-select ${formErrors.freeDay ? 'error' : ''}`}
-                    value={formData.freeDay}
-                    onChange={(e) => handleFormChange('freeDay', e.target.value)}
-                  >
-                    {WEEK_DAYS.map(d => (
-                      <option key={d.value} value={d.value}>
-                        {d.label}
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.freeDay && <span style={{ color: 'red', fontSize: '12px' }}>{formErrors.freeDay}</span>}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button type="submit" className="btn btn-primary">
-                  Add Employee
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={handleCancelForm}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-      </div>
-
       <div className="table-container">
         <table className="data-table">
           <thead>
@@ -496,7 +231,7 @@ function EmployeesTab() {
                 <button
                   className="btn-icon"
                   onClick={handleAddRow}
-                  title="Add new row"
+                  title="Add new employee"
                   style={{
                     background: '#C47ECE',
                     color: 'white',
@@ -529,8 +264,8 @@ function EmployeesTab() {
           <tbody>
             {employees.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                  No employees yet. Click “Add New Employee” or use the + button to get started.
+                <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                  No employees yet. Click the + button above to add one.
                 </td>
               </tr>
             ) : (

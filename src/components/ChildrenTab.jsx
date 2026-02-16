@@ -4,26 +4,10 @@ import { getChildren, saveChildren } from '../utils/storage'
 
 function ChildrenTab({ ageGroups }) {
   const [children, setChildren] = useState([])
-  const [showAddForm, setShowAddForm] = useState(false)
   const [editingRowId, setEditingRowId] = useState(null)
   const [selectedFilterGroup, setSelectedFilterGroup] = useState(null) // null = all groups
-  const [recommendedGroup, setRecommendedGroup] = useState(null) // { id, name, ageInMonths }
-  const [showRecommendation, setShowRecommendation] = useState(false)
   const [sortOrder, setSortOrder] = useState(null) // null, 'asc', 'desc'
   const fileInputRef = useRef(null)
-  const [formData, setFormData] = useState({
-    childName: '',
-    dateOfBirth: '',
-    registerStatus: 'candidate',
-    group: '',
-    parent1Name: '',
-    parent1Phone: '',
-    parent2Name: '',
-    parent2Phone: '',
-    healthNotes: '',
-    nutritionNotes: ''
-  })
-  const [formErrors, setFormErrors] = useState({})
 
   useEffect(() => {
     const loadedChildren = getChildren()
@@ -89,9 +73,10 @@ function ChildrenTab({ ageGroups }) {
       healthNotes: '',
       nutritionNotes: ''
     }
-    
+
     const updatedChildren = [...children, newChild]
     setChildren(updatedChildren)
+    saveChildren(updatedChildren)
     setEditingRowId(newChild.id)
   }
 
@@ -360,132 +345,6 @@ function ChildrenTab({ ageGroups }) {
     return dateString
   }
 
-  const handleFormChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-    // Clear error for this field when user starts typing
-    if (formErrors[field]) {
-      setFormErrors(prev => {
-        const newErrors = { ...prev }
-        delete newErrors[field]
-        return newErrors
-      })
-    }
-    
-    // Calculate recommendation when date of birth changes
-    if (field === 'dateOfBirth') {
-      const recommendation = calculateGroupForReferenceDate(value, ageGroups)
-      if (recommendation) {
-        setRecommendedGroup(recommendation)
-        setShowRecommendation(true)
-        // Pre-select the recommended group, but allow override
-        setFormData(prev => ({ ...prev, group: recommendation.id }))
-      } else {
-        setRecommendedGroup(null)
-        setShowRecommendation(false)
-        setFormData(prev => ({ ...prev, group: '' }))
-      }
-    }
-  }
-
-  const handleConfirmRecommendation = () => {
-    if (recommendedGroup) {
-      setFormData(prev => ({ ...prev, group: recommendedGroup.id }))
-      setShowRecommendation(false)
-    }
-  }
-
-  const handleOverrideGroup = (groupId) => {
-    setFormData(prev => ({ ...prev, group: groupId }))
-    setShowRecommendation(false)
-  }
-
-  const validateForm = () => {
-    const errors = {}
-    
-    if (!formData.childName.trim()) {
-      errors.childName = 'Child name is required'
-    }
-    
-    if (!formData.dateOfBirth.trim()) {
-      errors.dateOfBirth = 'Date of birth is required'
-    } else {
-      const birthDate = parseEuropeanDate(formData.dateOfBirth)
-      if (!birthDate) {
-        errors.dateOfBirth = 'Please enter a valid date in DD/MM/YYYY format'
-      }
-    }
-    
-    return errors
-  }
-
-  const handleSubmitForm = (e) => {
-    e.preventDefault()
-    
-    const errors = validateForm()
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      return
-    }
-    
-    // Use manually selected group if set, otherwise use recommended group
-    const finalGroup = formData.group || (recommendedGroup ? recommendedGroup.id : '')
-    
-    const newChild = {
-      id: Date.now().toString(),
-      childName: formData.childName.trim(),
-      dateOfBirth: formData.dateOfBirth.trim(),
-      registerStatus: formData.registerStatus,
-      group: finalGroup,
-      parent1Name: formData.parent1Name.trim(),
-      parent1Phone: formData.parent1Phone.trim(),
-      parent2Name: formData.parent2Name.trim(),
-      parent2Phone: formData.parent2Phone.trim(),
-      healthNotes: formData.healthNotes.trim(),
-      nutritionNotes: formData.nutritionNotes.trim()
-    }
-    
-    const updatedChildren = [...children, newChild]
-    setChildren(updatedChildren)
-    saveChildren(updatedChildren)
-    
-    // Reset form
-    setFormData({
-      childName: '',
-      dateOfBirth: '',
-      registerStatus: 'candidate',
-      group: '',
-      parent1Name: '',
-      parent1Phone: '',
-      parent2Name: '',
-      parent2Phone: '',
-      healthNotes: '',
-      nutritionNotes: ''
-    })
-    setFormErrors({})
-    setRecommendedGroup(null)
-    setShowRecommendation(false)
-    setShowAddForm(false)
-  }
-
-  const handleCancelForm = () => {
-    setFormData({
-      childName: '',
-      dateOfBirth: '',
-      registerStatus: 'candidate',
-      group: '',
-      parent1Name: '',
-      parent1Phone: '',
-      parent2Name: '',
-      parent2Phone: '',
-      healthNotes: '',
-      nutritionNotes: ''
-    })
-    setFormErrors({})
-    setRecommendedGroup(null)
-    setShowRecommendation(false)
-    setShowAddForm(false)
-  }
-
   // Calculate age in months for a child based on reference date (1.9.2026)
   const calculateAgeInMonths = (dateOfBirth) => {
     if (!dateOfBirth) return null
@@ -583,211 +442,18 @@ function ChildrenTab({ ageGroups }) {
       </div>
       
       <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-        {!showAddForm ? (
-          <>
-            <button
-              className="btn btn-primary"
-              onClick={() => setShowAddForm(true)}
-            >
-              Add New Child
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={handleAddRow}
-            >
-              + Add Row in Table
-            </button>
-            <label className="btn btn-secondary" style={{ cursor: 'pointer', margin: 0 }}>
-              Import CSV
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleCSVImport}
-                style={{ display: 'none' }}
-              />
-            </label>
-          </>
-        ) : (
-          <div className="add-child-form" style={{ 
-            background: '#fff', 
-            padding: '30px', 
-            borderRadius: '16px', 
-            boxShadow: '0 4px 12px rgba(196, 126, 206, 0.12)',
-            marginBottom: '20px',
-            width: '100%'
-          }}>
-            <h3 style={{ marginBottom: '20px', color: '#C47ECE', fontWeight: '800', fontFamily: 'Nunito, sans-serif' }}>Add New Child</h3>
-            <form onSubmit={handleSubmitForm}>
-              <div className="form-row">
-                <div className="form-group" style={{ flex: 2 }}>
-                  <label>Child Name <span style={{ color: 'red' }}>*</span></label>
-                  <input
-                    type="text"
-                    value={formData.childName}
-                    onChange={(e) => handleFormChange('childName', e.target.value)}
-                    placeholder="Enter child name"
-                    className={formErrors.childName ? 'error' : ''}
-                  />
-                  {formErrors.childName && (
-                    <span style={{ color: 'red', fontSize: '12px' }}>{formErrors.childName}</span>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label>Date of Birth <span style={{ color: 'red' }}>*</span></label>
-                  <input
-                    type="date"
-                    value={convertToDateInputFormat(formData.dateOfBirth)}
-                    onChange={(e) => {
-                      const convertedDate = convertFromDateInputFormat(e.target.value)
-                      handleFormChange('dateOfBirth', convertedDate)
-                    }}
-                    className={formErrors.dateOfBirth ? 'error' : ''}
-                    style={{ width: '100%' }}
-                  />
-                  {formErrors.dateOfBirth && (
-                    <span style={{ color: 'red', fontSize: '12px' }}>{formErrors.dateOfBirth}</span>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label>Register Status</label>
-                  <select
-                    className="editable-select"
-                    value={formData.registerStatus}
-                    onChange={(e) => handleFormChange('registerStatus', e.target.value)}
-                  >
-                    <option value="candidate">Candidate</option>
-                    <option value="registered">Registered</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Group</label>
-                  {showRecommendation && recommendedGroup ? (
-                    <div style={{ 
-                      padding: '12px', 
-                      background: '#E3CEEA', 
-                      borderRadius: '16px', 
-                      marginBottom: '10px',
-                      border: '2px solid #C47ECE'
-                    }}>
-                      <div style={{ marginBottom: '8px', fontWeight: '600', color: '#333' }}>
-                        Recommended Group (as of 1.9.2026):
-                      </div>
-                      <div style={{ marginBottom: '10px', fontSize: '16px', fontWeight: '700', color: '#C47ECE' }}>
-                        {recommendedGroup.name} (Age: {recommendedGroup.ageInMonths} months)
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={handleConfirmRecommendation}
-                          style={{ fontSize: '12px', padding: '6px 12px' }}
-                        >
-                          Confirm Recommendation
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => setShowRecommendation(false)}
-                          style={{ fontSize: '12px', padding: '6px 12px' }}
-                        >
-                          Select Manually
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  {(!showRecommendation || !recommendedGroup) && (
-                    <select
-                      className="editable-select"
-                      value={formData.group}
-                      onChange={(e) => handleOverrideGroup(e.target.value)}
-                    >
-                      <option value="">Select Group</option>
-                      {ageGroups.map(group => (
-                        <option key={group.id} value={group.id}>
-                          {group.name || group.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Parent 1 Name</label>
-                  <input
-                    type="text"
-                    value={formData.parent1Name}
-                    onChange={(e) => handleFormChange('parent1Name', e.target.value)}
-                    placeholder="Enter name"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Parent 1 Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.parent1Phone}
-                    onChange={(e) => handleFormChange('parent1Phone', e.target.value)}
-                    placeholder="Enter phone"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Parent 2 Name</label>
-                  <input
-                    type="text"
-                    value={formData.parent2Name}
-                    onChange={(e) => handleFormChange('parent2Name', e.target.value)}
-                    placeholder="Enter name"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Parent 2 Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.parent2Phone}
-                    onChange={(e) => handleFormChange('parent2Phone', e.target.value)}
-                    placeholder="Enter phone"
-                  />
-                </div>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Health Notes</label>
-                  <textarea
-                    value={formData.healthNotes}
-                    onChange={(e) => handleFormChange('healthNotes', e.target.value)}
-                    placeholder="Enter health-related notes"
-                    rows="3"
-                    style={{ width: '100%', padding: '12px 16px', border: '2px solid #E9ECEF', borderRadius: '16px', fontFamily: 'inherit' }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Nutrition Notes</label>
-                  <textarea
-                    value={formData.nutritionNotes}
-                    onChange={(e) => handleFormChange('nutritionNotes', e.target.value)}
-                    placeholder="Enter nutrition-related notes"
-                    rows="3"
-                    style={{ width: '100%', padding: '12px 16px', border: '2px solid #E9ECEF', borderRadius: '16px', fontFamily: 'inherit' }}
-                  />
-                </div>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button type="submit" className="btn btn-primary">
-                  Add Child
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={handleCancelForm}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+        <label className="btn btn-secondary" style={{ cursor: 'pointer', margin: 0 }} title="Import children from a CSV file">
+          Import CSV
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleCSVImport}
+            style={{ display: 'none' }}
+          />
+        </label>
       </div>
-      
+
       <div className="table-container">
         <table className="data-table">
           <thead>
@@ -796,7 +462,7 @@ function ChildrenTab({ ageGroups }) {
                 <button
                   className="btn-icon"
                   onClick={handleAddRow}
-                  title="Add new row"
+                  title="Add new child"
                   style={{
                     background: '#C47ECE',
                     color: 'white',
@@ -851,8 +517,8 @@ function ChildrenTab({ ageGroups }) {
               <tr>
                 <td colSpan="12" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
                   {selectedFilterGroup === null 
-                    ? 'No children registered yet. Click "Add New Child" or use the + button to get started.'
-                    : `No children in this group. Click "Add New Child" or use the + button to add children.`
+                    ? 'No children yet. Click the + button above to add one.'
+                    : 'No children in this group. Click the + button above to add one.'
                   }
                 </td>
               </tr>

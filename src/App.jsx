@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useCallback } from 'react'
 import ChildrenTab from './components/ChildrenTab'
 import EmployeesTab from './components/EmployeesTab'
 import ScheduleTab from './components/ScheduleTab'
 import SettingsTab from './components/SettingsTab'
-import { getAgeGroups, saveAgeGroups } from './utils/storage'
+import { getAgeGroups, getEmployees, saveAgeGroups } from './utils/storage'
 
 function App() {
   const [activeTab, setActiveTab] = useState('children')
   const [ageGroups, setAgeGroups] = useState([])
+  const [employees, setEmployees] = useState([])
+
+  // Refresh employees on tab change; use useLayoutEffect so Schedule tab gets fresh data before paint
+  useLayoutEffect(() => {
+    setEmployees(getEmployees())
+  }, [activeTab])
 
   useEffect(() => {
     const loadedGroups = getAgeGroups()
@@ -37,6 +43,10 @@ function App() {
     saveAgeGroups(newGroups)
   }
 
+  const handleEmployeesChange = useCallback(() => {
+    setEmployees(getEmployees())
+  }, [])
+
   const tabs = [
     { id: 'children', label: 'Children' },
     { id: 'employees', label: 'Employees' },
@@ -47,8 +57,9 @@ function App() {
 
   return (
     <div className="app">
-      {/* Brand Header */}
-      <header className="brand-header">
+      {/* Sticky header: brand + tabs always visible at top */}
+      <div className="app-header-sticky">
+        <header className="brand-header">
         <div className="brand-header-content">
           <h1 className="brand-title">עולם קטן</h1>
           <p className="brand-subtitle">Olam Katan</p>
@@ -73,13 +84,14 @@ function App() {
           ))}
         </div>
       </div>
+      </div>
 
       <div className="tab-content">
         {activeTab === 'children' && (
           <ChildrenTab ageGroups={ageGroups} />
         )}
         {activeTab === 'employees' && (
-          <EmployeesTab />
+          <EmployeesTab onEmployeesChange={handleEmployeesChange} />
         )}
         {activeTab === 'team' && (
           <div className="empty-state">
@@ -88,7 +100,11 @@ function App() {
           </div>
         )}
         {activeTab === 'schedule' && (
-          <ScheduleTab ageGroups={ageGroups} />
+          <ScheduleTab
+            ageGroups={ageGroups}
+            employees={employees}
+            onMountRefresh={handleEmployeesChange}
+          />
         )}
         {activeTab === 'settings' && (
           <SettingsTab 
