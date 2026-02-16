@@ -34,6 +34,14 @@ jobs:
         run: npm install
 
       - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_WORK_HOURS_MIN: ${{ secrets.VITE_WORK_HOURS_MIN }}
+          VITE_WORK_HOURS_MAX: ${{ secrets.VITE_WORK_HOURS_MAX }}
+          VITE_REFERENCE_DATE_YEAR: ${{ secrets.VITE_REFERENCE_DATE_YEAR }}
+          VITE_REFERENCE_DATE_MONTH: ${{ secrets.VITE_REFERENCE_DATE_MONTH }}
+          VITE_REFERENCE_DATE_DAY: ${{ secrets.VITE_REFERENCE_DATE_DAY }}
         run: npm run build
 
       - name: Encrypt  with StatiCrypt

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import AgeGroupWidget from './AgeGroupWidget'
 import { getChildren, saveChildren } from '../utils/storage'
+import { getReferenceDate } from '../config'
+import { t } from '../i18n'
 
 function ChildrenTab({ ageGroups }) {
   const [children, setChildren] = useState([])
@@ -51,8 +53,8 @@ function ChildrenTab({ ageGroups }) {
   }
 
   const handleDeleteChild = (childId, childName) => {
-    const name = childName || 'this child'
-    if (window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+    const name = childName || t.thisChild
+    if (window.confirm(t.deleteConfirm(name))) {
       const updatedChildren = children.filter(child => child.id !== childId)
       setChildren(updatedChildren)
       saveChildren(updatedChildren)
@@ -90,7 +92,7 @@ function ChildrenTab({ ageGroups }) {
       const lines = text.split('\n').filter(line => line.trim())
       
       if (lines.length === 0) {
-        alert('CSV file is empty')
+        alert(t.csvEmpty)
         return
       }
 
@@ -188,15 +190,14 @@ function ChildrenTab({ ageGroups }) {
     return ''
   }
 
-  // Calculate group based on reference date: September 1, 2026
+  // Calculate group based on configured reference date
   const calculateGroupForReferenceDate = (dateOfBirth, groups) => {
     if (!dateOfBirth) return null
     
     const birthDate = parseEuropeanDate(dateOfBirth)
     if (!birthDate) return null
     
-    // Reference date: September 1, 2026
-    const referenceDate = new Date(2026, 8, 1) // Month is 0-indexed, so 8 = September
+    const referenceDate = getReferenceDate()
     
     // Calculate age in months as of reference date, accounting for day of month
     let ageInMonths = (referenceDate.getFullYear() - birthDate.getFullYear()) * 12 + 
@@ -294,6 +295,43 @@ function ChildrenTab({ ageGroups }) {
     return group ? (group.name || group.label || '') : ''
   }
 
+  // Calculate expected entry to kindergarten: when child reaches minAge of their allocated group
+  const calculateExpectedEntryDate = (child) => {
+    if (!child.dateOfBirth || !child.group) return null
+
+    const birthDate = parseEuropeanDate(child.dateOfBirth)
+    if (!birthDate) return null
+
+    const group = ageGroups.find(g => g.id === child.group)
+    if (!group) return null
+
+    const targetYear = birthDate.getFullYear() + Math.floor((birthDate.getMonth() + group.minAge) / 12)
+    const targetMonth = (birthDate.getMonth() + group.minAge) % 12
+    const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
+    const targetDay = Math.min(birthDate.getDate(), daysInTargetMonth)
+
+    const entryDate = new Date(targetYear, targetMonth, targetDay)
+    const day = String(entryDate.getDate()).padStart(2, '0')
+    const month = String(entryDate.getMonth() + 1).padStart(2, '0')
+    const year = entryDate.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+
+  // Check if child's age at reference date matches their allocated group's age range (anomaly if not)
+  const hasGroupAgeMismatch = (child) => {
+    if (!child.group) return false
+    const ageInMonths = calculateAgeInMonths(child.dateOfBirth)
+    if (ageInMonths === null) return false
+    const group = ageGroups.find(g => g.id === child.group)
+    if (!group) return false
+    return ageInMonths < group.minAge || ageInMonths > group.maxAge
+  }
+
+  // Get recommended group for child based on age at reference date (for anomaly display)
+  const getRecommendedGroupForChild = (child) => {
+    return calculateGroupForReferenceDate(child.dateOfBirth, ageGroups)
+  }
+
   // Calculate the date when child will be eligible for next age group
   const calculateNextGroupTransitionDate = (child) => {
     if (!child.dateOfBirth || !child.group) return null
@@ -345,15 +383,14 @@ function ChildrenTab({ ageGroups }) {
     return dateString
   }
 
-  // Calculate age in months for a child based on reference date (1.9.2026)
+  // Calculate age in months for a child based on configured reference date
   const calculateAgeInMonths = (dateOfBirth) => {
     if (!dateOfBirth) return null
     
     const birthDate = parseEuropeanDate(dateOfBirth)
     if (!birthDate) return null
     
-    // Reference date: September 1, 2026
-    const referenceDate = new Date(2026, 8, 1) // Month is 0-indexed, so 8 = September
+    const referenceDate = getReferenceDate()
     
     // Calculate age in months as of reference date, accounting for day of month
     let ageInMonths = (referenceDate.getFullYear() - birthDate.getFullYear()) * 12 + 
@@ -404,57 +441,37 @@ function ChildrenTab({ ageGroups }) {
 
   return (
     <div>
-      <AgeGroupWidget children={children} ageGroups={ageGroups} />
-      
-      {/* Group Filter */}
-      <div style={{ 
-        marginBottom: '20px', 
-        padding: '20px', 
-        background: '#fff', 
-        borderRadius: '16px', 
-        boxShadow: '0 4px 12px rgba(196, 126, 206, 0.12)' 
-      }}>
-        <div style={{ marginBottom: '12px', fontWeight: '700', color: '#333', fontFamily: 'Nunito, sans-serif', fontSize: '18px' }}>
-          Filter by Group:
-        </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+      {/* Slim toolbar: filter + import - minimal, above the list */}
+      <div className="children-toolbar">
+        <div className="children-filter-pills">
           <button
-            className={`btn ${selectedFilterGroup === null ? 'btn-primary' : 'btn-secondary'}`}
+            className={`filter-pill ${selectedFilterGroup === null ? 'active' : ''}`}
             onClick={() => setSelectedFilterGroup(null)}
-            style={{ fontSize: '14px', padding: '8px 16px' }}
           >
-            All Groups ({children.length})
+            {t.all} ({children.length})
           </button>
           {ageGroups.map(group => {
-            const groupChildrenCount = children.filter(c => c.group === group.id).length
+            const count = children.filter(c => c.group === group.id).length
             return (
               <button
                 key={group.id}
-                className={`btn ${selectedFilterGroup === group.id ? 'btn-primary' : 'btn-secondary'}`}
+                className={`filter-pill ${selectedFilterGroup === group.id ? 'active' : ''}`}
                 onClick={() => setSelectedFilterGroup(group.id)}
-                style={{ fontSize: '14px', padding: '8px 16px' }}
               >
-                {group.name || group.label} ({groupChildrenCount})
+                {group.name || group.label} ({count})
               </button>
             )
           })}
         </div>
-      </div>
-      
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <label className="btn btn-secondary" style={{ cursor: 'pointer', margin: 0 }} title="Import children from a CSV file">
-          Import CSV
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleCSVImport}
-            style={{ display: 'none' }}
-          />
+        <label className="import-csv-link" title={t.importCSV}>
+          {t.importCSV}
+          <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} style={{ display: 'none' }} />
         </label>
       </div>
 
-      <div className="table-container">
+      <AgeGroupWidget children={children} ageGroups={ageGroups} />
+
+      <div className="table-container children-table-primary">
         <table className="data-table">
           <thead>
             <tr>
@@ -462,7 +479,7 @@ function ChildrenTab({ ageGroups }) {
                 <button
                   className="btn-icon"
                   onClick={handleAddRow}
-                  title="Add new child"
+                  title={t.addChild}
                   style={{
                     background: '#C47ECE',
                     color: 'white',
@@ -482,7 +499,7 @@ function ChildrenTab({ ageGroups }) {
                   +
                 </button>
               </th>
-              <th style={{ width: '120px' }}>Child Name</th>
+              <th style={{ width: '120px' }}>{t.childName}</th>
               <th 
                 className="sortable-header"
                 style={{ 
@@ -492,34 +509,32 @@ function ChildrenTab({ ageGroups }) {
                   position: 'relative'
                 }}
                 onClick={handleSortByAge}
-                title="Click to sort by age"
+                title={t.sortByAge}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
-                  Date of Birth
+                  {t.dateOfBirth}
                   {sortOrder === 'asc' && <span style={{ fontSize: '12px', color: '#C47ECE' }}>↑</span>}
                   {sortOrder === 'desc' && <span style={{ fontSize: '12px', color: '#C47ECE' }}>↓</span>}
                   {sortOrder === null && <span style={{ fontSize: '12px', color: '#ccc' }}>⇅</span>}
                 </div>
               </th>
-              <th style={{ width: '110px' }}>Register Status</th>
-              <th style={{ width: '80px' }}>Group</th>
-              <th style={{ width: '120px' }}>Next Group Date</th>
-              <th style={{ width: '100px' }}>Parent 1 Name</th>
-              <th style={{ width: '100px' }}>Parent 1 Phone</th>
-              <th style={{ width: '100px' }}>Parent 2 Name</th>
-              <th style={{ width: '100px' }}>Parent 2 Phone</th>
-              <th style={{ width: '120px' }}>Health Notes</th>
-              <th style={{ width: '120px' }}>Nutrition Notes</th>
+              <th style={{ width: '110px' }}>{t.registerStatus}</th>
+              <th style={{ width: '80px' }}>{t.group}</th>
+              <th style={{ width: '115px' }} title={t.expectedEntryTooltip}>{t.expectedEntry}</th>
+              <th style={{ width: '120px' }}>{t.nextGroupDate}</th>
+              <th style={{ width: '100px' }}>{t.parent1Name}</th>
+              <th style={{ width: '100px' }}>{t.parent1Phone}</th>
+              <th style={{ width: '100px' }}>{t.parent2Name}</th>
+              <th style={{ width: '100px' }}>{t.parent2Phone}</th>
+              <th style={{ width: '120px' }}>{t.healthNotes}</th>
+              <th style={{ width: '120px' }}>{t.nutritionNotes}</th>
             </tr>
           </thead>
           <tbody>
             {sortedAndFilteredChildren.length === 0 ? (
               <tr>
-                <td colSpan="12" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                  {selectedFilterGroup === null 
-                    ? 'No children yet. Click the + button above to add one.'
-                    : 'No children in this group. Click the + button above to add one.'
-                  }
+                <td colSpan="13" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                  {selectedFilterGroup === null ? t.noChildren : t.noChildrenInGroup}
                 </td>
               </tr>
             ) : (
@@ -531,7 +546,7 @@ function ChildrenTab({ ageGroups }) {
                         <button
                           className="btn-register"
                           onClick={() => handleQuickRegister(child.id)}
-                          title="Click to register this candidate"
+                          title={t.clickToRegister}
                           style={{
                             background: '#4CAF50',
                             color: 'white',
@@ -544,13 +559,13 @@ function ChildrenTab({ ageGroups }) {
                             width: '100%'
                           }}
                         >
-                          Register
+                          {t.register}
                         </button>
                       )}
                       <button
                         className="btn-delete"
                         onClick={() => handleDeleteChild(child.id, child.childName)}
-                        title="Delete this child"
+                        title={t.deleteChild}
                         style={{
                           background: '#f44336',
                           color: 'white',
@@ -562,9 +577,9 @@ function ChildrenTab({ ageGroups }) {
                           fontWeight: 'bold',
                           width: '100%'
                         }}
-                      >
-                        Delete
-                      </button>
+                        >
+                          {t.delete}
+                        </button>
                     </div>
                   </td>
                   <td>
@@ -573,7 +588,7 @@ function ChildrenTab({ ageGroups }) {
                       className="editable-input"
                       value={child.childName || ''}
                       onChange={(e) => handleCellChange(child.id, 'childName', e.target.value)}
-                      placeholder="Enter name"
+                      placeholder={t.enterName}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     />
                   </td>
@@ -597,32 +612,84 @@ function ChildrenTab({ ageGroups }) {
                         onChange={(e) => handleCellChange(child.id, 'registerStatus', e.target.value)}
                         style={{ flex: 1, fontSize: '12px', padding: '8px 6px' }}
                       >
-                        <option value="candidate">Candidate</option>
-                        <option value="registered">Registered</option>
+                        <option value="candidate">{t.candidate}</option>
+                        <option value="registered">{t.registered}</option>
                       </select>
                     </div>
                   </td>
                   <td>
-                    <select
-                      className="editable-select"
-                      value={child.group || ''}
-                      onChange={(e) => handleCellChange(child.id, 'group', e.target.value)}
-                      title={getFullGroupName(child.group)}
-                      style={{ fontSize: '12px', padding: '8px 6px' }}
-                    >
-                      <option value="">Select</option>
-                      {ageGroups.map(group => (
-                        <option key={group.id} value={group.id}>
-                          {group.name || group.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <select
+                        className="editable-select"
+                        value={child.group || ''}
+                        onChange={(e) => handleCellChange(child.id, 'group', e.target.value)}
+                        title={getFullGroupName(child.group)}
+                        style={{
+                          flex: 1,
+                          fontSize: '12px',
+                          padding: '8px 6px',
+                          ...(hasGroupAgeMismatch(child) ? { borderColor: 'var(--color-danger)', color: 'var(--color-danger)', fontWeight: '600' } : {})
+                        }}
+                      >
+                        <option value="">{t.select}</option>
+                        {ageGroups.map(group => (
+                          <option key={group.id} value={group.id}>
+                            {group.name || group.label}
+                          </option>
+                        ))}
+                      </select>
+                      {hasGroupAgeMismatch(child) && (() => {
+                        const rec = getRecommendedGroupForChild(child)
+                        const recText = rec ? t.recommendedShort(rec.name, rec.ageInMonths) : t.ageOutsideRanges
+                        return (
+                          <span
+                            className="group-mismatch-warning"
+                            title={t.ageMismatch(recText)}
+                          >
+                            ⚠
+                          </span>
+                        )
+                      })()}
+                    </div>
+                  </td>
+                  <td
+                    style={{
+                      fontSize: '12px',
+                      padding: '8px 6px',
+                      color: hasGroupAgeMismatch(child) ? 'var(--color-danger)' : '#666',
+                      textAlign: 'center',
+                      fontWeight: hasGroupAgeMismatch(child) ? '600' : 'normal'
+                    }}
+                  >
+                    {(() => {
+                      const entryDate = calculateExpectedEntryDate(child)
+                      const rec = hasGroupAgeMismatch(child) ? getRecommendedGroupForChild(child) : null
+                      if (entryDate === null) return <span style={{ color: '#999', fontStyle: 'italic' }}>{t.na}</span>
+                      return (
+                        <span
+                          className={hasGroupAgeMismatch(child) ? 'expected-entry-anomaly' : ''}
+                          title={rec ? t.recommended(rec.name, rec.ageInMonths) : undefined}
+                        >
+                          {entryDate}
+                          {hasGroupAgeMismatch(child) && (
+                            <>
+                              {' ⚠'}
+                              {rec && (
+                                <span className="anomaly-recommended" title={t.recommendedShort(rec.name, null)}>
+                                  {' → '}{rec.name}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td style={{ fontSize: '12px', padding: '8px 6px', color: '#666', textAlign: 'center' }}>
                     {(() => {
                       const transitionDate = calculateNextGroupTransitionDate(child)
                       if (transitionDate === null) {
-                        return <span style={{ color: '#999', fontStyle: 'italic' }}>N/A</span>
+                        return <span style={{ color: '#999', fontStyle: 'italic' }}>{t.na}</span>
                       }
                       return transitionDate
                     })()}
@@ -633,7 +700,7 @@ function ChildrenTab({ ageGroups }) {
                       className="editable-input"
                       value={child.parent1Name || ''}
                       onChange={(e) => handleCellChange(child.id, 'parent1Name', e.target.value)}
-                      placeholder="Enter name"
+                      placeholder={t.enterName}
                       title={child.parent1Name || ''}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     />
@@ -644,7 +711,7 @@ function ChildrenTab({ ageGroups }) {
                       className="editable-input"
                       value={child.parent1Phone || ''}
                       onChange={(e) => handleCellChange(child.id, 'parent1Phone', e.target.value)}
-                      placeholder="Enter phone"
+                      placeholder={t.enterPhone}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     />
                   </td>
@@ -654,7 +721,7 @@ function ChildrenTab({ ageGroups }) {
                       className="editable-input"
                       value={child.parent2Name || ''}
                       onChange={(e) => handleCellChange(child.id, 'parent2Name', e.target.value)}
-                      placeholder="Enter name"
+                      placeholder={t.enterName}
                       title={child.parent2Name || ''}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     />
@@ -665,7 +732,7 @@ function ChildrenTab({ ageGroups }) {
                       className="editable-input"
                       value={child.parent2Phone || ''}
                       onChange={(e) => handleCellChange(child.id, 'parent2Phone', e.target.value)}
-                      placeholder="Enter phone"
+                      placeholder={t.enterPhone}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     />
                   </td>
@@ -674,7 +741,7 @@ function ChildrenTab({ ageGroups }) {
                       className="editable-input"
                       value={child.healthNotes || ''}
                       onChange={(e) => handleCellChange(child.id, 'healthNotes', e.target.value)}
-                      placeholder="Health notes"
+                      placeholder={t.healthNotes}
                       rows="2"
                       style={{ fontSize: '12px', padding: '8px 6px', resize: 'vertical' }}
                       title={child.healthNotes || ''}
@@ -685,7 +752,7 @@ function ChildrenTab({ ageGroups }) {
                       className="editable-input"
                       value={child.nutritionNotes || ''}
                       onChange={(e) => handleCellChange(child.id, 'nutritionNotes', e.target.value)}
-                      placeholder="Nutrition notes"
+                      placeholder={t.nutritionNotes}
                       rows="2"
                       style={{ fontSize: '12px', padding: '8px 6px', resize: 'vertical' }}
                       title={child.nutritionNotes || ''}

@@ -82,9 +82,19 @@ body {
   flex-shrink: 0;
 }
 
-/* RTL Support */
-[dir="rtl"] {
+/* RTL Support - Hebrew */
+[dir="rtl"],
+html[lang="he"] {
   direction: rtl;
+  text-align: right;
+}
+
+[dir="rtl"] input,
+[dir="rtl"] select,
+[dir="rtl"] textarea,
+html[lang="he"] input,
+html[lang="he"] select,
+html[lang="he"] textarea {
   text-align: right;
 }
 
@@ -101,41 +111,46 @@ h2 { font-size: 2rem; }
 h3 { font-size: 1.75rem; }
 h4 { font-size: 1.5rem; }
 
-/* Brand Header - stays at top when content scrolls */
+/* Brand Header - compact app bar with title + nav in one row */
 .brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   background: var(--color-primary);
-  padding: 30px 40px;
+  padding: 12px 24px;
   position: relative;
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  margin-bottom: 0;
   flex-shrink: 0;
 }
 
 .brand-header-content {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   position: relative;
   z-index: 2;
-  text-align: center;
 }
 
 .brand-title {
   font-family: var(--font-heading);
-  font-size: 3.5rem;
+  font-size: 1.75rem;
   font-weight: 800;
   color: white;
   margin: 0;
-  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  letter-spacing: 1px;
   line-height: 1.2;
 }
 
 .brand-subtitle {
   font-family: var(--font-heading);
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
-  margin: 10px 0 0 0;
-  letter-spacing: 1px;
+  margin: 0;
+  letter-spacing: 0.5px;
 }
 
 .brand-decoration {
@@ -156,29 +171,29 @@ h4 { font-size: 1.5rem; }
 }
 
 .circle-1 {
-  width: 120px;
-  height: 120px;
+  width: 60px;
+  height: 60px;
   background: var(--color-secondary-blue);
-  top: -40px;
-  right: 10%;
+  top: -20px;
+  right: 8%;
   animation-delay: 0s;
 }
 
 .circle-2 {
-  width: 80px;
-  height: 80px;
+  width: 40px;
+  height: 40px;
   background: var(--color-secondary-peach);
-  bottom: -30px;
-  left: 15%;
+  bottom: -15px;
+  left: 12%;
   animation-delay: 2s;
 }
 
 .circle-3 {
-  width: 100px;
-  height: 100px;
+  width: 50px;
+  height: 50px;
   background: var(--color-secondary-mint);
   top: 50%;
-  left: 5%;
+  left: 3%;
   animation-delay: 4s;
 }
 
@@ -191,54 +206,48 @@ h4 { font-size: 1.5rem; }
   }
 }
 
-/* Tab Navigation - stays at top when content scrolls */
-.tab-container {
-  background-color: var(--color-white);
-  box-shadow: var(--shadow-md);
-  border-radius: 0;
-  flex-shrink: 0;
-}
-
+/* Tab Navigation - inline with brand, primary focus for ease of use */
 .tab-nav {
   display: flex;
-  border-bottom: 2px solid var(--color-gray-medium);
-  background-color: var(--color-white);
-  padding: 0 20px;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 2;
 }
 
 .tab-button {
-  padding: 15px 25px;
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   font-family: var(--font-heading);
-  color: var(--color-text-light);
-  transition: all 0.3s ease;
-  border-radius: var(--radius-default) var(--radius-default) 0 0;
+  color: rgba(255, 255, 255, 0.95);
+  transition: all 0.2s ease;
+  border-radius: var(--radius-small);
 }
 
 .tab-button:hover {
-  color: var(--color-primary);
-  background-color: var(--color-secondary-blue);
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 .tab-button.active {
+  background: white;
   color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  background-color: rgba(196, 126, 206, 0.05);
+  border-color: white;
 }
 
-/* Tab content - scrollable area, offset to account for fixed header */
+/* Tab content - scrollable area, compact header = more space for app */
 .tab-content {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 30px;
-  padding-top: 200px; /* space for fixed header (brand + tabs) */
+  padding: 24px;
+  padding-top: 72px; /* compact header height */
   background-color: transparent;
 }
 
@@ -292,6 +301,181 @@ h4 { font-size: 1.5rem; }
   font-size: 32px;
   font-weight: 800;
   font-family: var(--font-heading);
+}
+
+/* Children tab - group/age mismatch anomaly */
+.group-mismatch-warning {
+  margin-right: 4px;
+  color: var(--color-danger);
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.expected-entry-anomaly {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.anomaly-recommended {
+  color: var(--color-primary-dark);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+/* Children tab - compact toolbar, list primary */
+.children-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 6px 0;
+  flex-wrap: wrap;
+}
+
+.children-filter-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--color-gray-medium);
+  background: var(--color-white);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  color: var(--color-text-light);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(196, 126, 206, 0.08);
+}
+
+.filter-pill.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.import-csv-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  margin: 0;
+  transition: opacity 0.2s;
+}
+
+.import-csv-link:hover {
+  text-decoration: underline;
+  opacity: 0.9;
+}
+
+.children-table-primary {
+  margin-top: 8px;
+}
+
+/* Age group widget - compact collapsible */
+.age-group-widget-compact {
+  padding: 0;
+  margin-bottom: 16px;
+  border-radius: var(--radius-small);
+}
+
+.age-group-widget-compact .age-group-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  text-align: right;
+  transition: background 0.2s;
+}
+
+.age-group-widget-compact .age-group-widget-header:hover {
+  background: var(--color-primary-dark);
+}
+
+.age-group-widget-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.age-group-summary-item, .age-group-summary-total {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.age-group-widget-toggle {
+  margin-right: 8px;
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+.age-group-widget-compact.expanded .age-group-stats {
+  display: flex;
+  padding: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: rgba(196, 126, 206, 0.15);
+  border-radius: 0 0 var(--radius-small) var(--radius-small);
+  border: 1px solid rgba(196, 126, 206, 0.25);
+  border-top: none;
+}
+
+.age-group-widget-compact .age-group-item {
+  padding: 12px 16px;
+  min-width: 120px;
+}
+
+.age-group-widget-compact .age-group-item-range {
+  font-size: 12px;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 6px;
+}
+
+.age-group-widget-compact .age-group-item-details {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.age-group-widget-compact .age-group-item-max {
+  border-top: 1px solid rgba(255,255,255,0.3);
+  padding-top: 5px;
+  margin-top: 4px;
+}
+
+.age-group-widget-compact .age-group-over-capacity {
+  font-size: 11px;
+  font-weight: bold;
+  color: #FCE1B6;
+  background: rgba(244, 67, 54, 0.2);
+  padding: 3px 6px;
+  border-radius: 6px;
+  margin-top: 5px;
+}
+
+.age-group-widget-compact .age-group-item-overall {
+  margin-right: auto;
 }
 
 /* Table Styles */
@@ -699,6 +883,53 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: rgba(196, 126, 206, 0.25) !important;
   border: 2px dashed var(--color-primary) !important;
 }
+
+/* Schedule grid - clear visual separation between groups and days */
+.schedule-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.schedule-grid .schedule-grid-header {
+  border: 2px solid var(--color-gray-dark);
+  border-bottom: 3px solid var(--color-gray-dark);
+  background: var(--color-secondary-blue) !important;
+}
+
+.schedule-grid .schedule-group-label {
+  border: 2px solid var(--color-gray-dark);
+  font-weight: 700;
+}
+
+.schedule-grid .schedule-group-0 .schedule-group-label {
+  background: var(--color-secondary-peach) !important;
+  border-left: 4px solid #e67e22;
+}
+.schedule-grid .schedule-group-1 .schedule-group-label {
+  background: var(--color-secondary-mint) !important;
+  border-left: 4px solid #27ae60;
+}
+.schedule-grid .schedule-group-2 .schedule-group-label {
+  background: var(--color-secondary-blue) !important;
+  border-left: 4px solid #3498db;
+}
+
+.schedule-grid .schedule-cell {
+  border: 2px solid var(--color-gray-dark);
+  border-left: 1px solid var(--color-gray-medium);
+}
+
+.schedule-grid .schedule-group-row td:first-child {
+  border-right: 3px solid var(--color-gray-dark);
+}
+
+.schedule-grid .schedule-group-row {
+  border-bottom: 3px solid var(--color-gray-dark);
+}
+
+.schedule-grid .schedule-group-row:last-child {
+  border-bottom: 2px solid var(--color-gray-dark);
+}
 [draggable="true"]:active {
   cursor: grabbing;
 }
@@ -726,11 +957,26 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* Responsive */
 @media (max-width: 768px) {
   .brand-header {
-    padding: 20px 20px;
+    padding: 10px 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  
+  .tab-nav {
+    flex-wrap: wrap;
   }
   
   .brand-title {
-    font-size: 2.5rem;
+    font-size: 1.4rem;
+  }
+  
+  .brand-subtitle {
+    font-size: 0.8rem;
+  }
+  
+  .tab-button {
+    padding: 8px 12px;
+    font-size: 12px;
   }
   
   .brand-subtitle {
@@ -742,8 +988,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   }
   
   .tab-content {
-    padding: 15px;
-    padding-top: 180px; /* keep space for fixed header on smaller screens */
+    padding: 16px;
+    padding-top: 68px;
   }
   
   .age-group-stats {

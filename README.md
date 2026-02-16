@@ -61,6 +61,20 @@ To preview the production build:
 npm run preview
 ```
 
+### Configuration
+
+Defaults are in `src/config.js`. Override via environment variables (see `.env.example`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_WORK_HOURS_MIN` | 7 | Earliest working hour |
+| `VITE_WORK_HOURS_MAX` | 17 | Latest working hour |
+| `VITE_REFERENCE_DATE_YEAR` | 2026 | Reference date year (age calculations) |
+| `VITE_REFERENCE_DATE_MONTH` | 8 | Reference date month (0-indexed, 8 = September) |
+| `VITE_REFERENCE_DATE_DAY` | 1 | Reference date day |
+
+For deployment overrides, add these as GitHub repository secrets.
+
 ## Usage
 
 ### Children Tab
@@ -84,10 +98,15 @@ The widget at the top of the Children tab shows:
 
 ## Data Storage
 
-Currently, all data is stored in the browser's localStorage. This means:
-- Data persists across browser sessions
-- Data is specific to the browser/device
-- To migrate to a backend database later, update the `src/utils/storage.js` file
+**Without Supabase (default):** Data is stored in the browser's localStorage.
+- Persists across sessions on the same device
+- Data does *not* sync across devices
+
+**With Supabase (optional):** Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to sync data across devices.
+1. Create a project at [supabase.com](https://supabase.com)
+2. Run `supabase/schema.sql` in the SQL Editor
+3. Add secrets to your repo (Settings → Secrets) and to `.env` for local dev
+4. See `.env.example` for the required variables
 
 ## Project Structure
 

@@ -1,13 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAgeGroups, getEmployees, getSchedule, saveSchedule } from '../utils/storage'
+import { t } from '../i18n'
+
+const EXTERNAL_ROLES = [
+  { value: 'lead', label: t.lead },
+  { value: 'assistant', label: t.assistant }
+]
 
 const WEEK_DAYS = [
-  { key: 'sunday', label: 'Sunday' },
-  { key: 'monday', label: 'Monday' },
-  { key: 'tuesday', label: 'Tuesday' },
-  { key: 'wednesday', label: 'Wednesday' },
-  { key: 'thursday', label: 'Thursday' },
-  { key: 'friday', label: 'Friday' }
+  { key: 'sunday', label: t.sunday },
+  { key: 'monday', label: t.monday },
+  { key: 'tuesday', label: t.tuesday },
+  { key: 'wednesday', label: t.wednesday },
+  { key: 'thursday', label: t.thursday },
+  { key: 'friday', label: t.friday }
 ]
 
 function getWeekSunday(d) {
@@ -27,6 +33,19 @@ function toWeekKey(date) {
   return `${y}-${m}-${d}`
 }
 
+function normalizeExternals(cell) {
+  if (!cell) return []
+  if (cell.externals && Array.isArray(cell.externals)) {
+    return cell.externals.map(ext =>
+      typeof ext === 'string' ? { name: ext, role: 'assistant' } : { name: ext.name || '', role: ext.role || 'assistant' }
+    )
+  }
+  if (cell.externalNames && Array.isArray(cell.externalNames)) {
+    return cell.externalNames.map(n => ({ name: typeof n === 'string' ? n : n?.name || '', role: 'assistant' }))
+  }
+  return []
+}
+
 function formatWeekRange(sunday) {
   const sun = new Date(sunday)
   const fri = new Date(sunday)
@@ -42,16 +61,50 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
   const employees = employeesProp?.length ? employeesProp : getEmployees()
 
   useEffect(() => {
-    setGroups(ageGroups?.length ? ageGroups : getAgeGroups())
+    const fromProp = ageGroups?.length ? ageGroups : []
+    const fromStorage = getAgeGroups()
+    setGroups(fromProp.length ? fromProp : fromStorage)
   }, [ageGroups])
 
   useEffect(() => {
-    setScheduleData(getSchedule())
+    const raw = getSchedule()
+    const hasLegacy = Object.values(raw).some(w => w?.assignments && Object.values(w.assignments).some(d =>
+      Object.values(d).some(c => c?.externalNames?.length)
+    ))
+    if (!hasLegacy) {
+      setScheduleData(raw)
+      return
+    }
+    // Migrate legacy externalNames to externals
+    const migrated = {}
+    Object.keys(raw).forEach(wk => {
+      const week = raw[wk]
+      if (!week?.assignments) {
+        migrated[wk] = week
+        return
+      }
+      const nextAssignments = {}
+      Object.keys(week.assignments).forEach(dk => {
+        const day = week.assignments[dk]
+        nextAssignments[dk] = {}
+        Object.keys(day).forEach(gid => {
+          const c = day[gid]
+          nextAssignments[dk][gid] = {
+            employeeIds: c?.employeeIds || [],
+            externals: normalizeExternals(c)
+          }
+        })
+      })
+      migrated[wk] = { ...week, assignments: nextAssignments }
+    })
+    setScheduleData(migrated)
+    saveSchedule(migrated)
   }, [])
 
-  // Request fresh employees when Schedule tab mounts (e.g. after adding employees elsewhere)
+  // Request fresh employees and ensure scheduleData reload when Schedule tab mounts
   useEffect(() => {
     onMountRefresh?.()
+    setScheduleData(getSchedule())
   }, [onMountRefresh])
 
   const weekKey = toWeekKey(weekStart)
@@ -59,9 +112,13 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
   const getCellAssignments = useCallback(
     (dayKey, groupId) => {
       const week = scheduleData[weekKey]
-      if (!week?.assignments?.[dayKey]) return { employeeIds: [], externalNames: [] }
+      if (!week?.assignments?.[dayKey]) return { employeeIds: [], externals: [] }
       const cell = week.assignments[dayKey][groupId]
-      return cell || { employeeIds: [], externalNames: [] }
+      const base = cell || { employeeIds: [], externals: [] }
+      return {
+        employeeIds: base.employeeIds || [],
+        externals: normalizeExternals(base)
+      }
     },
     [scheduleData, weekKey]
   )
@@ -79,7 +136,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
       WEEK_DAYS.forEach(d => {
         week.assignments[d.key] = {}
         groups.forEach(g => {
-          week.assignments[d.key][g.id] = { employeeIds: [], externalNames: [] }
+          week.assignments[d.key][g.id] = { employeeIds: [], externals: [] }
         })
       })
       const activeEmployees = employees.filter(
@@ -90,7 +147,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
         WEEK_DAYS.forEach(({ key }) => {
           if (key === freeDay) return
           const gid = emp.groupId
-          if (!week.assignments[key][gid]) week.assignments[key][gid] = { employeeIds: [], externalNames: [] }
+          if (!week.assignments[key][gid]) week.assignments[key][gid] = { employeeIds: [], externals: [] }
           if (!week.assignments[key][gid].employeeIds.includes(emp.id)) {
             week.assignments[key][gid].employeeIds.push(emp.id)
           }
@@ -112,7 +169,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
       WEEK_DAYS.forEach(d => {
         w.assignments[d.key] = {}
         groups.forEach(g => {
-          w.assignments[d.key][g.id] = { employeeIds: [], externalNames: [] }
+          w.assignments[d.key][g.id] = { employeeIds: [], externals: [] }
         })
       })
       const active = employees.filter(e => e.status !== 'discontinued' && e.groupId)
@@ -121,7 +178,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
         WEEK_DAYS.forEach(({ key }) => {
           if (key === free) return
           const gid = emp.groupId
-          if (!w.assignments[key][gid]) w.assignments[key][gid] = { employeeIds: [], externalNames: [] }
+          if (!w.assignments[key][gid]) w.assignments[key][gid] = { employeeIds: [], externals: [] }
           if (!w.assignments[key][gid].employeeIds.includes(emp.id)) {
             w.assignments[key][gid].employeeIds.push(emp.id)
           }
@@ -132,14 +189,24 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
       saveSchedule(next)
     } else {
       let changed = false
-      const nextAssignments = { ...week.assignments }
+      const nextAssignments = {}
+      const active = employees.filter(e => e.status !== 'discontinued' && e.groupId)
+      const free = (emp) => (emp.freeDay || 'friday').toLowerCase()
       groups.forEach(g => {
         WEEK_DAYS.forEach(d => {
           if (!nextAssignments[d.key]) nextAssignments[d.key] = {}
-          if (!nextAssignments[d.key][g.id]) {
-            nextAssignments[d.key][g.id] = { employeeIds: [], externalNames: [] }
-            changed = true
+          const current = week.assignments?.[d.key]?.[g.id] || { employeeIds: [], externals: [] }
+          const shouldHave = active
+            .filter(emp => emp.groupId === g.id && free(emp) !== d.key)
+            .map(emp => emp.id)
+          const existingIds = new Set(current.employeeIds || [])
+          const toAdd = shouldHave.filter(id => !existingIds.has(id))
+          const newIds = [...new Set([...(current.employeeIds || []), ...toAdd])]
+          nextAssignments[d.key][g.id] = {
+            employeeIds: newIds,
+            externals: normalizeExternals(current)
           }
+          if (toAdd.length > 0) changed = true
         })
       })
       if (changed) {
@@ -148,7 +215,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
         saveSchedule(next)
       }
     }
-  }, [weekKey, groups.length, employees.length])
+  }, [weekKey, groups, employees])
 
   const updateCell = useCallback(
     (dayKey, groupId, updater) => {
@@ -159,7 +226,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
       }
       if (!week) return
       const day = week.assignments[dayKey] || {}
-      const cell = day[groupId] || { employeeIds: [], externalNames: [] }
+      const cell = day[groupId] || { employeeIds: [], externals: [] }
       const next = updater({ ...cell })
       const nextDay = { ...day, [groupId]: next }
       const nextAssignments = { ...week.assignments, [dayKey]: nextDay }
@@ -172,13 +239,27 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
   )
 
   const addExternal = useCallback(
-    (dayKey, groupId, name) => {
+    (dayKey, groupId, name, role = 'assistant') => {
       const trimmed = (name || '').trim()
       if (!trimmed) return
       updateCell(dayKey, groupId, cell => ({
         ...cell,
-        externalNames: [...(cell.externalNames || []), trimmed]
+        employeeIds: cell.employeeIds || [],
+        externals: [...normalizeExternals(cell), { name: trimmed, role }]
       }))
+    },
+    [updateCell]
+  )
+
+  const updateExternalRole = useCallback(
+    (dayKey, groupId, index, role) => {
+      updateCell(dayKey, groupId, cell => {
+        const ext = normalizeExternals(cell)
+        if (index < 0 || index >= ext.length) return cell
+        const next = [...ext]
+        next[index] = { ...next[index], role }
+        return { ...cell, employeeIds: cell.employeeIds || [], externals: next }
+      })
     },
     [updateCell]
   )
@@ -187,7 +268,8 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
     (dayKey, groupId, index) => {
       updateCell(dayKey, groupId, cell => ({
         ...cell,
-        externalNames: (cell.externalNames || []).filter((_, i) => i !== index)
+        employeeIds: cell.employeeIds || [],
+        externals: normalizeExternals(cell).filter((_, i) => i !== index)
       }))
     },
     [updateCell]
@@ -216,34 +298,39 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
         if (!week?.assignments) return
         const nextAssignments = { ...week.assignments }
         const srcDay = { ...(nextAssignments[sourceDay] || {}) }
-        const srcCell = srcDay[sourceGroupId] || { employeeIds: [], externalNames: [] }
+        const srcCell = srcDay[sourceGroupId] || { employeeIds: [], externals: [] }
+        const srcExt = normalizeExternals(srcCell)
         let toAdd = null
         if (data.employeeId) {
           srcDay[sourceGroupId] = {
             ...srcCell,
-            employeeIds: (srcCell.employeeIds || []).filter(id => id !== data.employeeId)
+            employeeIds: (srcCell.employeeIds || []).filter(id => id !== data.employeeId),
+            externals: srcExt
           }
           toAdd = { type: 'emp', id: data.employeeId }
-        } else if (data.externalName != null && data.externalIndex >= 0) {
-          const names = [...(srcCell.externalNames || [])]
-          names.splice(data.externalIndex, 1)
-          srcDay[sourceGroupId] = { ...srcCell, externalNames: names }
-          toAdd = { type: 'ext', name: data.externalName }
+        } else if (data.externalIndex >= 0 && data.externalName != null) {
+          const ext = srcExt[data.externalIndex]
+          const nextExt = srcExt.filter((_, i) => i !== data.externalIndex)
+          srcDay[sourceGroupId] = { ...srcCell, employeeIds: srcCell.employeeIds || [], externals: nextExt }
+          toAdd = { type: 'ext', external: ext ? { name: ext.name, role: ext.role || 'assistant' } : { name: data.externalName, role: data.externalRole || 'assistant' } }
         }
         if (!toAdd) return
         nextAssignments[sourceDay] = srcDay
         const tgtDay = { ...(nextAssignments[targetDay] || {}) }
-        const tgtCell = tgtDay[targetGroupId] || { employeeIds: [], externalNames: [] }
+        const tgtCell = tgtDay[targetGroupId] || { employeeIds: [], externals: [] }
+        const tgtExt = normalizeExternals(tgtCell)
         if (toAdd.type === 'emp' && !(tgtCell.employeeIds || []).includes(toAdd.id)) {
           tgtDay[targetGroupId] = {
             ...tgtCell,
-            employeeIds: [...(tgtCell.employeeIds || []), toAdd.id]
+            employeeIds: [...(tgtCell.employeeIds || []), toAdd.id],
+            externals: tgtExt
           }
           nextAssignments[targetDay] = tgtDay
         } else if (toAdd.type === 'ext') {
           tgtDay[targetGroupId] = {
             ...tgtCell,
-            externalNames: [...(tgtCell.externalNames || []), toAdd.name]
+            employeeIds: tgtCell.employeeIds || [],
+            externals: [...tgtExt, toAdd.external]
           }
           nextAssignments[targetDay] = tgtDay
         }
@@ -306,8 +393,9 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
         const emp = empMap.get(id)
         if (emp?.role) counts[emp.role] = (counts[emp.role] || 0) + 1
       })
-      ;(cell.externalNames || []).forEach(() => {
-        counts.assistant += 1
+      ;(normalizeExternals(cell) || []).forEach(ext => {
+        const r = ext.role || 'assistant'
+        if (counts[r] !== undefined) counts[r] = (counts[r] || 0) + 1
       })
       const meetMin =
         (counts.lead || 0) >= (min.lead || 0) &&
@@ -327,8 +415,8 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
   if (groups.length === 0) {
     return (
       <div className="empty-state">
-        <h3>Schedule</h3>
-        <p>Add age groups in Settings first, then return here.</p>
+        <h3>{t.scheduleTitle}</h3>
+        <p>{t.addAgeGroupsFirst}</p>
       </div>
     )
   }
@@ -347,20 +435,20 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button className="btn btn-secondary" onClick={handlePrevWeek}>
-            ← Prev
+            ← {t.prevWeek}
           </button>
           <h3 style={{ margin: 0, minWidth: '220px' }}>
-            Week: {formatWeekRange(weekStart)}
+            {t.week}: {formatWeekRange(weekStart)}
           </h3>
           <button className="btn btn-secondary" onClick={handleNextWeek}>
-            Next →
+            {t.nextWeek} →
           </button>
         </div>
         <button
           className="btn btn-secondary"
           onClick={() => setWeekStart(getWeekSunday(new Date()))}
         >
-          Current Week
+          {t.currentWeek}
         </button>
       </div>
 
@@ -382,7 +470,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
             background: '#4CAF50'
           }}
         />
-        Green = Optimal
+        {t.greenOptimal}
         <span
           style={{
             display: 'inline-block',
@@ -393,7 +481,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
             marginLeft: 12
           }}
         />
-        Amber = Minimum
+        {t.amberMinimum}
         <span
           style={{
             display: 'inline-block',
@@ -404,29 +492,29 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
             marginLeft: 12
           }}
         />
-        Red = Below min
+        {t.redBelow}
       </div>
 
       <div className="table-container" style={{ overflowX: 'auto' }}>
-        <table className="data-table" style={{ tableLayout: 'auto' }}>
+        <table className="data-table schedule-grid" style={{ tableLayout: 'auto' }}>
           <thead>
             <tr>
-              <th style={{ minWidth: 100, padding: '10px' }}>Group</th>
+              <th className="schedule-grid-header" style={{ minWidth: 100, padding: '10px' }}>{t.groupCol}</th>
               {WEEK_DAYS.map(d => (
-                <th key={d.key} style={{ minWidth: 140, padding: '10px' }}>
+                <th key={d.key} className="schedule-grid-header" style={{ minWidth: 140, padding: '10px' }}>
                   {d.label}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {groups.map(group => (
-              <tr key={group.id}>
+            {groups.map((group, groupIndex) => (
+              <tr key={group.id} className={`schedule-group-row schedule-group-${groupIndex % 3}`}>
                 <td
+                  className="schedule-group-label"
                   style={{
                     fontWeight: 700,
-                    padding: '10px',
-                    background: 'var(--color-secondary-peach)'
+                    padding: '10px'
                   }}
                 >
                   {group.name || group.label}
@@ -450,12 +538,11 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
                         setDragOverCell(null)
                         handleDrop(e, day.key, group.id)
                       }}
-                      className={dragOverCell === `${day.key}-${group.id}` ? 'schedule-cell-drag-over' : ''}
+                      className={`schedule-cell ${dragOverCell === `${day.key}-${group.id}` ? 'schedule-cell-drag-over' : ''}`}
                       style={{
                         padding: '8px',
                         minWidth: 140,
                         background: bgMap[status] || 'transparent',
-                        border: '1px solid var(--color-gray-medium)',
                         verticalAlign: 'top'
                       }}
                     >
@@ -464,9 +551,34 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
                           display: 'flex',
                           flexDirection: 'column',
                           gap: '6px',
-                          minHeight: 80
+                          minHeight: 80,
+                          position: 'relative',
+                          paddingTop: 26
                         }}
                       >
+                        {status !== 'gray' && (
+                          <span
+                            title={status === 'green' ? t.adequatelyStaffed : status === 'amber' ? t.belowOptimal : t.belowMinimum}
+                            style={{
+                              position: 'absolute',
+                              top: 4,
+                              right: 4,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 20,
+                              height: 20,
+                              borderRadius: 4,
+                              background: status === 'green' ? '#4CAF50' : status === 'amber' ? '#FF9800' : '#f44336',
+                              color: 'white',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                            }}
+                          >
+                            {status === 'green' ? '✓' : '!'}
+                          </span>
+                        )}
                         {(cell.employeeIds || []).map(id => {
                           const emp = empMap.get(id)
                           const name = emp?.name || id
@@ -516,7 +628,7 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
                             </div>
                           )
                         })}
-                        {(cell.externalNames || []).map((ext, i) => (
+                        {(cell.externals || []).map((ext, i) => (
                           <div
                             key={`ext-${i}`}
                             draggable
@@ -524,8 +636,9 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
                               e.dataTransfer.setData(
                                 'application/json',
                                 JSON.stringify({
-                                  externalName: ext,
+                                  externalName: ext.name,
                                   externalIndex: i,
+                                  externalRole: ext.role,
                                   sourceDay: day.key,
                                   sourceGroupId: group.id
                                 })
@@ -539,10 +652,29 @@ function ScheduleTab({ ageGroups, employees: employeesProp = [], onMountRefresh 
                               fontSize: 12,
                               display: 'flex',
                               justifyContent: 'space-between',
+                              alignItems: 'center',
                               cursor: 'grab'
                             }}
                           >
-                            <span>{ext} (ext)</span>
+                            <span style={{ flex: 1 }}>{ext.name} (ext)</span>
+                            <select
+                              value={ext.role === 'cook' ? 'assistant' : (ext.role || 'assistant')}
+                              onChange={e => {
+                                e.stopPropagation()
+                                updateExternalRole(day.key, group.id, i, e.target.value)
+                              }}
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                fontSize: 10,
+                                padding: '2px 4px',
+                                marginLeft: 4,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {EXTERNAL_ROLES.map(r => (
+                                <option key={r.value} value={r.value}>{r.label}</option>
+                              ))}
+                            </select>
                             <button
                               type="button"
                               onClick={() =>
@@ -598,6 +730,7 @@ function CellPersonDropdown({
   const [query, setQuery] = useState('')
   const [showManualInput, setShowManualInput] = useState(false)
   const [manualName, setManualName] = useState('')
+  const [manualRole, setManualRole] = useState('assistant')
   const [focusedIndex, setFocusedIndex] = useState(0)
   const containerRef = useRef(null)
   const inputRef = useRef(null)
@@ -619,7 +752,7 @@ function CellPersonDropdown({
   )
   const alreadyInCell = new Set([
     ...(cell?.employeeIds || []),
-    ...(cell?.externalNames || []).map(n => `ext:${n}`)
+    ...(normalizeExternals(cell) || []).map(ext => `ext:${ext.name}`)
   ])
   const freeDay = (emp) => (emp.freeDay || 'friday').toLowerCase()
   const isAvailable = (emp) => freeDay(emp) !== dayKey
@@ -640,38 +773,40 @@ function CellPersonDropdown({
 
   const options = useMemo(() => {
     const list = []
-    list.push({ type: 'divider', label: inGroupFiltered.length > 0 ? `In this group (${inGroupFiltered.length})` : 'In this group (none)' })
+    list.push({ type: 'divider', label: t.inThisGroup(inGroupFiltered.length) })
     inGroupFiltered.forEach(e => {
       const available = isAvailable(e) && !alreadyInCell.has(e.id)
-      const suffix = !isAvailable(e) ? ' — Off' : alreadyInCell.has(e.id) ? ' — Already added' : ''
+      const suffix = !isAvailable(e) ? ` — ${t.off}` : alreadyInCell.has(e.id) ? ` — ${t.alreadyAdded}` : ''
+      const roleLabel = e.role ? (e.role === 'cook' ? t.assistant : EXTERNAL_ROLES.find(r => r.value === e.role)?.label || e.role) : ''
       list.push({
         type: 'emp',
         id: e.id,
-        label: (e.name || 'Unnamed') + (e.role ? ` (${e.role})` : '') + suffix,
+        label: (e.name || t.unnamed) + (roleLabel ? ` (${roleLabel})` : '') + suffix,
         emp: e,
         disabled: !available
       })
     })
     if (otherFiltered.length) {
-      list.push({ type: 'divider', label: 'From other groups' })
+      list.push({ type: 'divider', label: t.fromOtherGroups })
       otherFiltered.forEach(e => {
         const available = isAvailable(e) && !alreadyInCell.has(e.id)
         const g = groups.find(gr => gr.id === e.groupId)
-        const suffix = !isAvailable(e) ? ' — Off' : alreadyInCell.has(e.id) ? ' — Already added' : ''
+        const suffix = !isAvailable(e) ? ` — ${t.off}` : alreadyInCell.has(e.id) ? ` — ${t.alreadyAdded}` : ''
+        const roleLabel = e.role ? (e.role === 'cook' ? t.assistant : EXTERNAL_ROLES.find(r => r.value === e.role)?.label || e.role) : ''
         list.push({
           type: 'emp',
           id: e.id,
-          label: (e.name || 'Unnamed') + (g ? ` — ${g.name}` : '') + (e.role ? ` (${e.role})` : '') + suffix,
+          label: (e.name || t.unnamed) + (g ? ` — ${g.name}` : '') + (roleLabel ? ` (${roleLabel})` : '') + suffix,
           emp: e,
           disabled: !available
         })
       })
     }
-    list.push({ type: 'divider', label: 'Manual add' })
+    list.push({ type: 'divider', label: t.manualAdd })
     if (query.trim()) {
-      list.push({ type: 'external', label: `Add "${query.trim()}" as external`, externalName: query.trim() })
+      list.push({ type: 'external', label: t.addAsExternal(query.trim()), externalName: query.trim() })
     }
-    list.push({ type: 'manual', label: '➕ Add manually (type name below)...' })
+    list.push({ type: 'manual', label: t.addManually })
     return list
   }, [inGroupFiltered, otherFiltered, groups, query, dayKey, alreadyInCell])
 
@@ -725,7 +860,7 @@ function CellPersonDropdown({
       setQuery('')
       setShowManualInput(false)
     } else if (opt.type === 'external' && opt.externalName) {
-      onAddExternal(dayKey, groupId, opt.externalName)
+      onAddExternal(dayKey, groupId, opt.externalName, manualRole)
       setQuery('')
       setOpen(false)
       setShowManualInput(false)
@@ -739,7 +874,7 @@ function CellPersonDropdown({
     e?.preventDefault?.()
     const name = (manualName || query || '').trim()
     if (name) {
-      onAddExternal(dayKey, groupId, name)
+      onAddExternal(dayKey, groupId, name, manualRole)
       setManualName('')
       setQuery('')
       setShowManualInput(false)
@@ -796,7 +931,7 @@ function CellPersonDropdown({
           textAlign: 'right'
         }}
       >
-        + Add person
+        + {t.addPerson}
       </button>
       {open && (
         <div
@@ -820,7 +955,7 @@ function CellPersonDropdown({
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search by name..."
+            placeholder={t.searchByName}
             style={{
               width: '100%',
               padding: '10px 14px',
@@ -906,7 +1041,7 @@ function CellPersonDropdown({
                   type="text"
                   value={manualName}
                   onChange={e => setManualName(e.target.value)}
-                  placeholder="Type name and press Enter"
+                  placeholder={t.typeNameEnter}
                   style={{
                     width: '100%',
                     padding: '8px 12px',
@@ -916,8 +1051,26 @@ function CellPersonDropdown({
                     marginBottom: 8
                   }}
                 />
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-light)', display: 'block', marginBottom: 4 }}>{t.role}</label>
+                  <select
+                    value={manualRole}
+                    onChange={e => setManualRole(e.target.value)}
+                    style={{
+                      padding: '6px 10px',
+                      fontSize: 12,
+                      border: '2px solid var(--color-gray-medium)',
+                      borderRadius: 8,
+                      width: '100%'
+                    }}
+                  >
+                    {EXTERNAL_ROLES.map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <button type="submit" className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 12 }}>
-                  Add
+                  {t.add}
                 </button>
               </form>
             )}

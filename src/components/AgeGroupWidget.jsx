@@ -1,6 +1,8 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { t } from '../i18n'
 
 function AgeGroupWidget({ children, ageGroups }) {
+  const [expanded, setExpanded] = useState(false)
   const calculateAgeInMonths = (dateOfBirth) => {
     if (!dateOfBirth) return null
     
@@ -68,84 +70,57 @@ function AgeGroupWidget({ children, ageGroups }) {
   const totalCandidates = children.filter(c => c.registerStatus === 'candidate' || !c.registerStatus).length
 
   return (
-    <div className="age-group-widget">
-      <h3>Age Group Statistics</h3>
-      <div className="age-group-stats">
-        {ageGroups.map(group => {
-          const stats = groupStats[group.id] || { registered: 0, candidates: 0, total: 0, max: group.maxCapacity || 0 }
-          const isOverCapacity = stats.total > stats.max && stats.max > 0
-          
-          return (
-            <div key={group.id} className="age-group-item" style={isOverCapacity ? { backgroundColor: 'rgba(244, 67, 54, 0.3)' } : {}}>
-              <div className="label" style={{ 
-                fontWeight: 'bold', 
-                marginBottom: '8px',
-                textRendering: 'optimizeLegibility',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale'
-              }}>
-                {group.name || group.label}
-              </div>
-              <div style={{ 
-                fontSize: '13px', 
-                color: 'rgba(255,255,255,0.95)', 
-                marginBottom: '10px', 
-                fontWeight: '500',
-                textRendering: 'optimizeLegibility',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale'
-              }}>
-                {group.minAge}-{group.maxAge} months
-              </div>
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '5px', 
-                fontSize: '14px',
-                textRendering: 'optimizeLegibility',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale'
-              }}>
-                <div>Registered: <strong>{stats.registered}</strong></div>
-                <div>Candidates: <strong>{stats.candidates}</strong></div>
-                <div>Total: <strong>{stats.total}</strong></div>
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: '5px', marginTop: '5px' }}>
-                  Max: <strong>{stats.max || '∞'}</strong>
+    <div className={`age-group-widget age-group-widget-compact ${expanded ? 'expanded' : ''}`}>
+      <button
+        type="button"
+        className="age-group-widget-header"
+        onClick={() => setExpanded(!expanded)}
+        title={expanded ? t.collapseStats : t.expandStats}
+        aria-expanded={expanded}
+      >
+        <span className="age-group-widget-summary">
+          {ageGroups.map((group, i) => {
+            const stats = groupStats[group.id] || { total: 0 }
+            return (
+              <span key={group.id} className="age-group-summary-item">
+                {i > 0 && ' • '}{group.name || group.label}: <strong>{stats.total}</strong>
+              </span>
+            )
+          })}
+          <span className="age-group-summary-total"> • {t.total}: <strong>{totalChildren}</strong></span>
+        </span>
+        <span className="age-group-widget-toggle">{expanded ? '▼' : '▶'}</span>
+      </button>
+      {expanded && (
+        <div className="age-group-stats">
+          {ageGroups.map(group => {
+            const stats = groupStats[group.id] || { registered: 0, candidates: 0, total: 0, max: group.maxCapacity || 0 }
+            const isOverCapacity = stats.total > stats.max && stats.max > 0
+
+            return (
+              <div key={group.id} className="age-group-item" style={isOverCapacity ? { backgroundColor: 'rgba(244, 67, 54, 0.3)' } : {}}>
+                <div className="label">{group.name || group.label}</div>
+                <div className="age-group-item-range">{group.minAge}-{group.maxAge} {t.months}</div>
+                <div className="age-group-item-details">
+                  <div>{t.registeredShort}: <strong>{stats.registered}</strong></div>
+                  <div>{t.candidatesShort}: <strong>{stats.candidates}</strong></div>
+                  <div>{t.total}: <strong>{stats.total}</strong></div>
+                  <div className="age-group-item-max">{t.maxShort}: <strong>{stats.max || '∞'}</strong></div>
+                  {isOverCapacity && <div className="age-group-over-capacity">{t.overCapacity}</div>}
                 </div>
-                {isOverCapacity && (
-                  <div style={{ color: '#FCE1B6', fontWeight: 'bold', fontSize: '12px', marginTop: '5px', backgroundColor: 'rgba(244, 67, 54, 0.2)', padding: '4px 8px', borderRadius: '8px' }}>
-                    Over Capacity!
-                  </div>
-                )}
               </div>
-            </div>
-          )
-        })}
-        <div className="age-group-item" style={{ marginRight: 'auto' }}>
-          <div className="label" style={{ 
-            fontWeight: 'bold', 
-            marginBottom: '8px',
-            textRendering: 'optimizeLegibility',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale'
-          }}>Overall</div>
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: '5px', 
-            fontSize: '14px',
-            textRendering: 'optimizeLegibility',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale'
-          }}>
-            <div>Registered: <strong>{totalRegistered}</strong></div>
-            <div>Candidates: <strong>{totalCandidates}</strong></div>
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: '5px', marginTop: '5px' }}>
-              Total: <strong>{totalChildren}</strong>
+            )
+          })}
+          <div className="age-group-item age-group-item-overall">
+            <div className="label">{t.overall}</div>
+            <div className="age-group-item-details">
+              <div>{t.registeredShort}: <strong>{totalRegistered}</strong></div>
+              <div>{t.candidatesShort}: <strong>{totalCandidates}</strong></div>
+              <div className="age-group-item-max">{t.total}: <strong>{totalChildren}</strong></div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

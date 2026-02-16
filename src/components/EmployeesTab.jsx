@@ -1,35 +1,71 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { getEmployees, saveEmployees, getAgeGroups, getChildren } from '../utils/storage'
+import { config } from '../config'
+import { t } from '../i18n'
 
 const EMPLOYMENT_STATUSES = [
-  { value: 'permanent', label: 'Permanent' },
-  { value: 'temp', label: 'Temp' },
-  { value: 'discontinued', label: 'Discontinued' },
-  { value: 'filler', label: 'Filler' }
+  { value: 'permanent', label: t.permanent },
+  { value: 'temp', label: t.temp },
+  { value: 'discontinued', label: t.discontinued },
+  { value: 'filler', label: t.filler }
 ]
 
 const EMPLOYEE_ROLES = [
-  { value: 'lead', label: 'Lead' },
-  { value: 'assistant', label: 'Assistant' },
-  { value: 'cook', label: 'Cook' }
+  { value: 'lead', label: t.lead },
+  { value: 'assistant', label: t.assistant }
 ]
 
-// Sunday to Friday is the working week
 const WEEK_DAYS = [
-  { value: 'sunday', label: 'Sunday' },
-  { value: 'monday', label: 'Monday' },
-  { value: 'tuesday', label: 'Tuesday' },
-  { value: 'wednesday', label: 'Wednesday' },
-  { value: 'thursday', label: 'Thursday' },
-  { value: 'friday', label: 'Friday' }
+  { value: 'sunday', label: t.sunday },
+  { value: 'monday', label: t.monday },
+  { value: 'tuesday', label: t.tuesday },
+  { value: 'wednesday', label: t.wednesday },
+  { value: 'thursday', label: t.thursday },
+  { value: 'friday', label: t.friday }
 ]
 
-const HOURS = Array.from({ length: 11 }, (_, i) => 7 + i) // 7..17
+const { min: WORK_MIN, max: WORK_MAX } = config.workHours
+const HOURS = Array.from({ length: WORK_MAX - WORK_MIN + 1 }, (_, i) => WORK_MIN + i)
+
+function decimalToTimeStr(decimal) {
+  if (decimal == null || !Number.isFinite(decimal)) return `${WORK_MIN}:00`
+  const h = Math.floor(decimal)
+  const m = Math.round((decimal - h) * 60)
+  return `${h}:${m.toString().padStart(2, '0')}`
+}
+
+function parseTimeToDecimal(str) {
+  if (!str || typeof str !== 'string') return null
+  const s = str.trim()
+  if (/^\d+$/.test(s)) return Math.min(WORK_MAX, Math.max(WORK_MIN, Number(s)))
+  const m1 = s.match(/^(\d{1,2}):(\d{1,2})$/)
+  if (m1) {
+    const h = parseInt(m1[1], 10)
+    const m = parseInt(m1[2], 10)
+    if (m >= 60) return null
+    const dec = h + m / 60
+    return Math.min(WORK_MAX, Math.max(WORK_MIN, dec))
+  }
+  const m2 = s.match(/^(\d{1,2})\.(\d{1,2})$/)
+  if (m2) {
+    const dec = parseFloat(s)
+    return Math.min(WORK_MAX, Math.max(WORK_MIN, dec))
+  }
+  const n = parseFloat(s)
+  return Number.isFinite(n) ? Math.min(WORK_MAX, Math.max(WORK_MIN, n)) : null
+}
+
+function clampDecimal(n) {
+  const x = Number(n)
+  if (!Number.isFinite(x)) return WORK_MIN
+  return Math.min(WORK_MAX, Math.max(WORK_MIN, x))
+}
 
 function EmployeesTab({ onEmployeesChange }) {
   const [employees, setEmployees] = useState([])
   const [ageGroups, setAgeGroups] = useState([])
   const [children, setChildren] = useState([])
+  const [timeEdit, setTimeEdit] = useState(null) // { empId, field, str }
 
   useEffect(() => {
     setEmployees(getEmployees())
@@ -51,8 +87,8 @@ function EmployeesTab({ onEmployeesChange }) {
   }
 
   const handleDeleteEmployee = (employeeId, employeeName) => {
-    const name = employeeName?.trim() ? employeeName.trim() : 'this employee'
-    if (window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+    const name = employeeName?.trim() ? employeeName.trim() : t.thisEmployee
+    if (window.confirm(t.deleteConfirm(name))) {
       const updated = employees.filter(emp => emp.id !== employeeId)
       setEmployees(updated)
       saveEmployees(updated)
@@ -63,8 +99,8 @@ function EmployeesTab({ onEmployeesChange }) {
   const handleAddRow = () => {
     const newEmployee = {
       id: `new-${Date.now()}`,
-      workStart: 7,
-      workEnd: 17,
+      workStart: WORK_MIN,
+      workEnd: WORK_MAX,
       name: '',
       phone: '',
       status: 'permanent',
@@ -79,38 +115,22 @@ function EmployeesTab({ onEmployeesChange }) {
     onEmployeesChange?.()
   }
 
-  const clampHour = (n) => {
-    const x = Number(n)
-    if (!Number.isFinite(x)) return 7
-    return Math.min(17, Math.max(7, x))
-  }
-
-  const handleRowStartChange = (employeeId, newStart) => {
-    const start = clampHour(newStart)
+  const handleTimeChange = (employeeId, field, rawValue) => {
+    const decimal = typeof rawValue === 'number' ? clampDecimal(rawValue) : (parseTimeToDecimal(String(rawValue)) ?? (field === 'workStart' ? WORK_MIN : WORK_MAX))
     const current = employees.find(e => e.id === employeeId)
-    const end = clampHour(current?.workEnd ?? 17)
-
-    // Keep end >= start + 1 when possible
-    const nextEnd = end <= start ? Math.min(17, start + 1) : end
+    const curStart = clampDecimal(current?.workStart ?? WORK_MIN)
+    const curEnd = clampDecimal(current?.workEnd ?? WORK_MAX)
+    let nextStart, nextEnd
+    if (field === 'workStart') {
+      nextStart = decimal
+      nextEnd = curEnd <= decimal ? Math.min(WORK_MAX, decimal + 0.25) : curEnd
+    } else {
+      nextEnd = decimal
+      nextStart = curStart >= decimal ? Math.max(WORK_MIN, decimal - 0.25) : curStart
+    }
     const updated = employees.map(emp => {
       if (emp.id !== employeeId) return emp
-      return { ...emp, workStart: start, workEnd: nextEnd }
-    })
-    setEmployees(updated)
-    saveEmployees(updated)
-    onEmployeesChange?.()
-  }
-
-  const handleRowEndChange = (employeeId, newEnd) => {
-    const end = clampHour(newEnd)
-    const current = employees.find(e => e.id === employeeId)
-    const start = clampHour(current?.workStart ?? 7)
-
-    // Keep end >= start + 1 when possible
-    const nextEnd = end <= start ? Math.min(17, start + 1) : end
-    const updated = employees.map(emp => {
-      if (emp.id !== employeeId) return emp
-      return { ...emp, workEnd: nextEnd }
+      return { ...emp, workStart: nextStart, workEnd: nextEnd }
     })
     setEmployees(updated)
     saveEmployees(updated)
@@ -162,7 +182,7 @@ function EmployeesTab({ onEmployeesChange }) {
     <div>
       {/* Group staffing & regulation summary */}
       <div className="age-group-widget" style={{ marginBottom: '20px' }}>
-        <h3>Group Staffing & Regulation</h3>
+        <h3>{t.groupStaffing}</h3>
         <div className="age-group-stats">
           {ageGroups.map(group => {
             const stats = groupStats[group.id] || {
@@ -190,21 +210,21 @@ function EmployeesTab({ onEmployeesChange }) {
                   {group.name || group.label}
                 </div>
                 <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                  Employees:&nbsp;
+                  {t.employeesCount}:&nbsp;
                   <strong>{stats.employees}</strong>
                 </div>
                 <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                  Children (registered):&nbsp;
+                  {t.childrenRegistered}:&nbsp;
                   <strong>{stats.children}</strong>
                 </div>
                 <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                  Target ratio (children / employee):&nbsp;
-                  <strong>{stats.targetRatio ?? 'Not set'}</strong>
+                  {t.targetRatio}:&nbsp;
+                  <strong>{stats.targetRatio ?? t.na}</strong>
                 </div>
                 <div style={{ fontSize: '14px', marginTop: '6px' }}>
-                  Current ratio:&nbsp;
+                  {t.currentRatio}:&nbsp;
                   {stats.ratio === null ? (
-                    <span style={{ fontStyle: 'italic' }}>N/A</span>
+                    <span style={{ fontStyle: 'italic' }}>{t.na}</span>
                   ) : (
                     <span
                       style={
@@ -231,7 +251,7 @@ function EmployeesTab({ onEmployeesChange }) {
                 <button
                   className="btn-icon"
                   onClick={handleAddRow}
-                  title="Add new employee"
+                  title={t.addEmployee}
                   style={{
                     background: '#C47ECE',
                     color: 'white',
@@ -251,21 +271,21 @@ function EmployeesTab({ onEmployeesChange }) {
                   +
                 </button>
               </th>
-              <th style={{ width: '160px' }}>Name</th>
-              <th style={{ width: '90px' }}>Start</th>
-              <th style={{ width: '90px' }}>End</th>
-              <th style={{ width: '140px' }}>Phone</th>
-              <th style={{ width: '120px' }}>Status</th>
-              <th style={{ width: '120px' }}>Role</th>
-              <th style={{ width: '140px' }}>Group</th>
-              <th style={{ width: '120px' }}>Free Day</th>
+              <th style={{ width: '160px' }}>{t.name}</th>
+              <th style={{ width: '90px' }}>{t.entry}</th>
+              <th style={{ width: '90px' }}>{t.exit}</th>
+              <th style={{ width: '140px' }}>{t.phone}</th>
+              <th style={{ width: '120px' }}>{t.status}</th>
+              <th style={{ width: '120px' }}>{t.role}</th>
+              <th style={{ width: '140px' }}>{t.group}</th>
+              <th style={{ width: '120px' }}>{t.freeDay}</th>
             </tr>
           </thead>
           <tbody>
             {employees.length === 0 ? (
               <tr>
                 <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                  No employees yet. Click the + button above to add one.
+                  {t.noEmployees}
                 </td>
               </tr>
             ) : (
@@ -275,7 +295,7 @@ function EmployeesTab({ onEmployeesChange }) {
                     <button
                       className="btn-delete"
                       onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                      title="Delete this employee"
+                      title={t.deleteEmployee}
                       style={{
                         background: '#f44336',
                         color: 'white',
@@ -288,7 +308,7 @@ function EmployeesTab({ onEmployeesChange }) {
                         width: '100%'
                       }}
                     >
-                      Delete
+                      {t.delete}
                     </button>
                   </td>
 
@@ -298,39 +318,61 @@ function EmployeesTab({ onEmployeesChange }) {
                       className="editable-input"
                       value={emp.name || ''}
                       onChange={(e) => handleCellChange(emp.id, 'name', e.target.value)}
-                      placeholder="Enter name"
+                      placeholder={t.enterName}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     />
                   </td>
 
                   <td>
-                    <select
-                      className="editable-select"
-                      value={clampHour(emp.workStart ?? 7)}
-                      onChange={(e) => handleRowStartChange(emp.id, Number(e.target.value))}
-                      style={{ fontSize: '12px', padding: '8px 6px' }}
-                    >
+                    <input
+                      type="text"
+                      className="editable-input"
+                      value={timeEdit?.empId === emp.id && timeEdit?.field === 'workStart' ? timeEdit.str : decimalToTimeStr(clampDecimal(emp.workStart ?? WORK_MIN))}
+                      onChange={(e) => setTimeEdit(t => t?.empId === emp.id && t?.field === 'workStart' ? { ...t, str: e.target.value } : { empId: emp.id, field: 'workStart', str: e.target.value })}
+                      onFocus={() => setTimeEdit({ empId: emp.id, field: 'workStart', str: decimalToTimeStr(clampDecimal(emp.workStart ?? WORK_MIN)) })}
+                      onBlur={() => {
+                        if (timeEdit?.empId === emp.id && timeEdit?.field === 'workStart') {
+                          const dec = parseTimeToDecimal(timeEdit.str)
+                          if (dec != null) handleTimeChange(emp.id, 'workStart', dec)
+                          setTimeEdit(null)
+                        }
+                      }}
+                      list="entry-hours-list"
+                      placeholder={`${WORK_MIN}:00`}
+                      style={{ fontSize: '12px', padding: '8px 6px', width: '72px' }}
+                      title={t.typeTime('7:30')}
+                    />
+                    <datalist id="entry-hours-list">
                       {HOURS.map(h => (
-                        <option key={h} value={h}>
-                          {h}:00
-                        </option>
+                        <option key={h} value={`${h}:00`} />
                       ))}
-                    </select>
+                    </datalist>
                   </td>
 
                   <td>
-                    <select
-                      className="editable-select"
-                      value={clampHour(emp.workEnd ?? 17)}
-                      onChange={(e) => handleRowEndChange(emp.id, Number(e.target.value))}
-                      style={{ fontSize: '12px', padding: '8px 6px' }}
-                    >
+                    <input
+                      type="text"
+                      className="editable-input"
+                      value={timeEdit?.empId === emp.id && timeEdit?.field === 'workEnd' ? timeEdit.str : decimalToTimeStr(clampDecimal(emp.workEnd ?? WORK_MAX))}
+                      onChange={(e) => setTimeEdit(t => t?.empId === emp.id && t?.field === 'workEnd' ? { ...t, str: e.target.value } : { empId: emp.id, field: 'workEnd', str: e.target.value })}
+                      onFocus={() => setTimeEdit({ empId: emp.id, field: 'workEnd', str: decimalToTimeStr(clampDecimal(emp.workEnd ?? WORK_MAX)) })}
+                      onBlur={() => {
+                        if (timeEdit?.empId === emp.id && timeEdit?.field === 'workEnd') {
+                          const dec = parseTimeToDecimal(timeEdit.str)
+                          if (dec != null) handleTimeChange(emp.id, 'workEnd', dec)
+                          setTimeEdit(null)
+                        }
+                      }}
+                      list="exit-hours-list"
+                      placeholder={`${WORK_MAX}:00`}
+                      style={{ fontSize: '12px', padding: '8px 6px', width: '72px' }}
+                      title={t.typeTime('17:30')}
+                    />
+                    <datalist id="exit-hours-list">
                       {HOURS.map(h => (
-                        <option key={h} value={h}>
-                          {h}:00
-                        </option>
+                        <option key={h} value={`${h}:00`} />
                       ))}
-                    </select>
+                    </datalist>
                   </td>
 
                   <td>
@@ -339,7 +381,7 @@ function EmployeesTab({ onEmployeesChange }) {
                       className="editable-input"
                       value={emp.phone || ''}
                       onChange={(e) => handleCellChange(emp.id, 'phone', e.target.value)}
-                      placeholder="Enter phone"
+                      placeholder={t.enterPhone}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     />
                   </td>
@@ -362,7 +404,7 @@ function EmployeesTab({ onEmployeesChange }) {
                   <td>
                     <select
                       className="editable-select"
-                      value={emp.role || 'assistant'}
+                      value={emp.role === 'cook' ? 'assistant' : (emp.role || 'assistant')}
                       onChange={(e) => handleCellChange(emp.id, 'role', e.target.value)}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     >
@@ -381,7 +423,7 @@ function EmployeesTab({ onEmployeesChange }) {
                       onChange={(e) => handleCellChange(emp.id, 'groupId', e.target.value)}
                       style={{ fontSize: '12px', padding: '8px 6px' }}
                     >
-                      <option value="">Select</option>
+                      <option value="">{t.select}</option>
                       {ageGroups.map(group => (
                         <option key={group.id} value={group.id}>
                           {group.name || group.label}

@@ -3,40 +3,47 @@ import ChildrenTab from './components/ChildrenTab'
 import EmployeesTab from './components/EmployeesTab'
 import ScheduleTab from './components/ScheduleTab'
 import SettingsTab from './components/SettingsTab'
-import { getAgeGroups, getEmployees, saveAgeGroups } from './utils/storage'
+import { loadAll, getAgeGroups, getEmployees, saveAgeGroups } from './utils/storage'
+import { config } from './config'
+import { t } from './i18n'
 
 function App() {
+  const [ready, setReady] = useState(false)
   const [activeTab, setActiveTab] = useState('children')
   const [ageGroups, setAgeGroups] = useState([])
   const [employees, setEmployees] = useState([])
 
-  // Refresh employees on tab change; use useLayoutEffect so Schedule tab gets fresh data before paint
+  useEffect(() => {
+    loadAll().then(() => setReady(true))
+  }, [])
+
+  // Refresh employees and age groups when switching to Schedule so tab always has latest data
   useLayoutEffect(() => {
-    setEmployees(getEmployees())
+    if (activeTab === 'schedule') {
+      setEmployees(getEmployees())
+      setAgeGroups(getAgeGroups())
+    }
   }, [activeTab])
 
   useEffect(() => {
+    if (!ready) return
     const loadedGroups = getAgeGroups()
     if (loadedGroups.length === 0) {
-      const defaultGroups = [
-        { id: '1', name: 'Infants', minAge: 5, maxAge: 10, label: '5-10 months', maxCapacity: 10, ratio: 4, staffingMin: { lead: 1, assistant: 1, cook: 0 }, staffingOptimal: { lead: 2, assistant: 2, cook: 0 } },
-        { id: '2', name: 'Toddlers', minAge: 11, maxAge: 15, label: '11-15 months', maxCapacity: 12, ratio: 6, staffingMin: { lead: 1, assistant: 1, cook: 0 }, staffingOptimal: { lead: 2, assistant: 2, cook: 0 } },
-        { id: '3', name: 'Preschoolers', minAge: 18, maxAge: 30, label: '18-30 months', maxCapacity: 15, ratio: 8, staffingMin: { lead: 1, assistant: 2, cook: 0 }, staffingOptimal: { lead: 2, assistant: 3, cook: 0 } }
-      ]
-      saveAgeGroups(defaultGroups)
-      setAgeGroups(defaultGroups)
+      saveAgeGroups(config.defaultAgeGroups)
+      setAgeGroups(config.defaultAgeGroups)
     } else {
+      const { min: defMin, optimal: defOpt } = config.defaultStaffing
       const migrated = loadedGroups.map(g => ({
         ...g,
-        staffingMin: g.staffingMin || { lead: 1, assistant: 1, cook: 0 },
-        staffingOptimal: g.staffingOptimal || { lead: 2, assistant: 2, cook: 0 }
+        staffingMin: g.staffingMin || defMin,
+        staffingOptimal: g.staffingOptimal || defOpt
       }))
       if (migrated.some((g, i) => !loadedGroups[i].staffingMin || !loadedGroups[i].staffingOptimal)) {
         saveAgeGroups(migrated)
       }
       setAgeGroups(migrated)
     }
-  }, [])
+  }, [ready])
 
   const handleAgeGroupsChange = (newGroups) => {
     setAgeGroups(newGroups)
@@ -48,31 +55,28 @@ function App() {
   }, [])
 
   const tabs = [
-    { id: 'children', label: 'Children' },
-    { id: 'employees', label: 'Employees' },
-    { id: 'team', label: 'Team' },
-    { id: 'schedule', label: 'Schedule' },
-    { id: 'settings', label: 'Settings' }
+    { id: 'children', label: t.children },
+    { id: 'employees', label: t.employees },
+    { id: 'team', label: t.team },
+    { id: 'schedule', label: t.schedule },
+    { id: 'settings', label: t.settings }
   ]
 
   return (
     <div className="app">
-      {/* Sticky header: brand + tabs always visible at top */}
+      {/* Compact sticky app bar: brand + tabs in one row */}
       <div className="app-header-sticky">
         <header className="brand-header">
-        <div className="brand-header-content">
-          <h1 className="brand-title">עולם קטן</h1>
-          <p className="brand-subtitle">Olam Katan</p>
-        </div>
-        <div className="brand-decoration">
-          <div className="decoration-circle circle-1"></div>
-          <div className="decoration-circle circle-2"></div>
-          <div className="decoration-circle circle-3"></div>
-        </div>
-      </header>
-
-      <div className="tab-container">
-        <div className="tab-nav">
+          <div className="brand-header-content">
+            <h1 className="brand-title">עולם קטן</h1>
+            <span className="brand-subtitle">Olam Katan</span>
+          </div>
+          <div className="brand-decoration">
+            <div className="decoration-circle circle-1"></div>
+            <div className="decoration-circle circle-2"></div>
+            <div className="decoration-circle circle-3"></div>
+          </div>
+          <nav className="tab-nav">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -82,36 +86,36 @@ function App() {
               {tab.label}
             </button>
           ))}
-        </div>
-      </div>
+          </nav>
+        </header>
       </div>
 
       <div className="tab-content">
-        {activeTab === 'children' && (
-          <ChildrenTab ageGroups={ageGroups} />
-        )}
-        {activeTab === 'employees' && (
-          <EmployeesTab onEmployeesChange={handleEmployeesChange} />
-        )}
-        {activeTab === 'team' && (
-          <div className="empty-state">
-            <h3>Team Tab</h3>
-            <p>Coming soon...</p>
+        {!ready ? (
+          <div className="empty-state" style={{ padding: '2rem' }}>
+            <p>{t.loading}</p>
           </div>
-        )}
-        {activeTab === 'schedule' && (
+        ) : activeTab === 'children' ? (
+          <ChildrenTab ageGroups={ageGroups} />
+        ) : activeTab === 'employees' ? (
+          <EmployeesTab onEmployeesChange={handleEmployeesChange} />
+        ) : activeTab === 'team' ? (
+          <div className="empty-state">
+            <h3>{t.team}</h3>
+            <p>{t.comingSoon}</p>
+          </div>
+        ) : activeTab === 'schedule' ? (
           <ScheduleTab
             ageGroups={ageGroups}
             employees={employees}
             onMountRefresh={handleEmployeesChange}
           />
-        )}
-        {activeTab === 'settings' && (
+        ) : activeTab === 'settings' ? (
           <SettingsTab 
             ageGroups={ageGroups} 
             onAgeGroupsChange={handleAgeGroupsChange}
           />
-        )}
+        ) : null}
       </div>
     </div>
   )
