@@ -669,6 +669,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   font-family: var(--font-heading);
 }
 
+/* Schedule Tab - Drag & Drop */
+.schedule-cell-drag-over {
+  background: rgba(196, 126, 206, 0.25) !important;
+  border: 2px dashed var(--color-primary) !important;
+}
+[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .brand-header {

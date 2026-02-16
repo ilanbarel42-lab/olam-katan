@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import ChildrenTab from './components/ChildrenTab'
 import EmployeesTab from './components/EmployeesTab'
+import ScheduleTab from './components/ScheduleTab'
 import SettingsTab from './components/SettingsTab'
 import { getAgeGroups, saveAgeGroups } from './utils/storage'
 
@@ -9,19 +10,25 @@ function App() {
   const [ageGroups, setAgeGroups] = useState([])
 
   useEffect(() => {
-    // Load age groups from storage or use defaults
     const loadedGroups = getAgeGroups()
     if (loadedGroups.length === 0) {
-      // Set default age groups
       const defaultGroups = [
-        { id: '1', name: 'Infants', minAge: 5, maxAge: 10, label: '5-10 months', maxCapacity: 10, ratio: 4 },
-        { id: '2', name: 'Toddlers', minAge: 11, maxAge: 15, label: '11-15 months', maxCapacity: 12, ratio: 6 },
-        { id: '3', name: 'Preschoolers', minAge: 18, maxAge: 30, label: '18-30 months', maxCapacity: 15, ratio: 8 }
+        { id: '1', name: 'Infants', minAge: 5, maxAge: 10, label: '5-10 months', maxCapacity: 10, ratio: 4, staffingMin: { lead: 1, assistant: 1, cook: 0 }, staffingOptimal: { lead: 2, assistant: 2, cook: 0 } },
+        { id: '2', name: 'Toddlers', minAge: 11, maxAge: 15, label: '11-15 months', maxCapacity: 12, ratio: 6, staffingMin: { lead: 1, assistant: 1, cook: 0 }, staffingOptimal: { lead: 2, assistant: 2, cook: 0 } },
+        { id: '3', name: 'Preschoolers', minAge: 18, maxAge: 30, label: '18-30 months', maxCapacity: 15, ratio: 8, staffingMin: { lead: 1, assistant: 2, cook: 0 }, staffingOptimal: { lead: 2, assistant: 3, cook: 0 } }
       ]
       saveAgeGroups(defaultGroups)
       setAgeGroups(defaultGroups)
     } else {
-      setAgeGroups(loadedGroups)
+      const migrated = loadedGroups.map(g => ({
+        ...g,
+        staffingMin: g.staffingMin || { lead: 1, assistant: 1, cook: 0 },
+        staffingOptimal: g.staffingOptimal || { lead: 2, assistant: 2, cook: 0 }
+      }))
+      if (migrated.some((g, i) => !loadedGroups[i].staffingMin || !loadedGroups[i].staffingOptimal)) {
+        saveAgeGroups(migrated)
+      }
+      setAgeGroups(migrated)
     }
   }, [])
 
@@ -81,10 +88,7 @@ function App() {
           </div>
         )}
         {activeTab === 'schedule' && (
-          <div className="empty-state">
-            <h3>Schedule Tab</h3>
-            <p>Coming soon...</p>
-          </div>
+          <ScheduleTab ageGroups={ageGroups} />
         )}
         {activeTab === 'settings' && (
           <SettingsTab 

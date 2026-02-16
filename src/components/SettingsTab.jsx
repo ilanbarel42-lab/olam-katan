@@ -7,12 +7,24 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
   const [newMaxAge, setNewMaxAge] = useState('')
   const [newMaxCapacity, setNewMaxCapacity] = useState('')
   const [newRatio, setNewRatio] = useState('')
+  const [newMinLead, setNewMinLead] = useState('1')
+  const [newMinAssistant, setNewMinAssistant] = useState('1')
+  const [newMinCook, setNewMinCook] = useState('0')
+  const [newOptLead, setNewOptLead] = useState('2')
+  const [newOptAssistant, setNewOptAssistant] = useState('2')
+  const [newOptCook, setNewOptCook] = useState('0')
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
   const [editMinAge, setEditMinAge] = useState('')
   const [editMaxAge, setEditMaxAge] = useState('')
   const [editMaxCapacity, setEditMaxCapacity] = useState('')
   const [editRatio, setEditRatio] = useState('')
+  const [editMinLead, setEditMinLead] = useState('')
+  const [editMinAssistant, setEditMinAssistant] = useState('')
+  const [editMinCook, setEditMinCook] = useState('')
+  const [editOptLead, setEditOptLead] = useState('')
+  const [editOptAssistant, setEditOptAssistant] = useState('')
+  const [editOptCook, setEditOptCook] = useState('')
 
   const handleAddGroup = () => {
     const minAge = parseInt(newMinAge, 10)
@@ -39,6 +51,13 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
       alert('Please enter a valid regulation ratio (children per employee, must be > 0)')
       return
     }
+
+    const minLead = Math.max(0, parseInt(newMinLead, 10) || 0)
+    const minAssistant = Math.max(0, parseInt(newMinAssistant, 10) || 0)
+    const minCook = Math.max(0, parseInt(newMinCook, 10) || 0)
+    const optLead = Math.max(minLead, parseInt(newOptLead, 10) || minLead)
+    const optAssistant = Math.max(minAssistant, parseInt(newOptAssistant, 10) || minAssistant)
+    const optCook = Math.max(minCook, parseInt(newOptCook, 10) || minCook)
     
     const newGroup = {
       id: Date.now().toString(),
@@ -47,7 +66,9 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
       maxAge,
       label: `${minAge}-${maxAge} months`,
       maxCapacity,
-      ratio
+      ratio,
+      staffingMin: { lead: minLead, assistant: minAssistant, cook: minCook },
+      staffingOptimal: { lead: optLead, assistant: optAssistant, cook: optCook }
     }
     
     const updatedGroups = [...ageGroups, newGroup].sort((a, b) => a.minAge - b.minAge)
@@ -59,6 +80,11 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
     setNewMaxCapacity('')
     setNewRatio('')
   }
+
+  const getStaffing = (group) => ({
+    min: group.staffingMin || { lead: 1, assistant: 1, cook: 0 },
+    opt: group.staffingOptimal || { lead: 2, assistant: 2, cook: 0 }
+  })
 
   const handleDeleteGroup = (groupId) => {
     const children = getChildren()
@@ -86,6 +112,14 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
         ? group.ratio.toString()
         : ''
     )
+    const sm = group.staffingMin || { lead: 1, assistant: 1, cook: 0 }
+    const so = group.staffingOptimal || { lead: 2, assistant: 2, cook: 0 }
+    setEditMinLead(sm.lead.toString())
+    setEditMinAssistant(sm.assistant.toString())
+    setEditMinCook((sm.cook || 0).toString())
+    setEditOptLead(so.lead.toString())
+    setEditOptAssistant(so.assistant.toString())
+    setEditOptCook((so.cook || 0).toString())
   }
 
   const handleSaveEdit = (groupId) => {
@@ -113,6 +147,13 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
       alert('Please enter a valid regulation ratio (children per employee, must be > 0)')
       return
     }
+
+    const minLead = Math.max(0, parseInt(editMinLead, 10) || 0)
+    const minAssistant = Math.max(0, parseInt(editMinAssistant, 10) || 0)
+    const minCook = Math.max(0, parseInt(editMinCook, 10) || 0)
+    const optLead = Math.max(minLead, parseInt(editOptLead, 10) || minLead)
+    const optAssistant = Math.max(minAssistant, parseInt(editOptAssistant, 10) || minAssistant)
+    const optCook = Math.max(minCook, parseInt(editOptCook, 10) || minCook)
     
     const updatedGroups = ageGroups.map(group => {
       if (group.id === groupId) {
@@ -123,7 +164,9 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
           maxAge,
           label: `${minAge}-${maxAge} months`,
           maxCapacity,
-          ratio
+          ratio,
+          staffingMin: { lead: minLead, assistant: minAssistant, cook: minCook },
+          staffingOptimal: { lead: optLead, assistant: optAssistant, cook: optCook }
         }
       }
       return group
@@ -213,7 +256,7 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                       style={{ width: '80px', padding: '8px' }}
                       min="1"
                     />
-                    <span style={{ marginRight: '20px' }}>Ratio (children / employee):</span>
+                    <span style={{ marginRight: '20px' }}>Ratio:</span>
                     <input
                       type="number"
                       step="0.1"
@@ -223,6 +266,16 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                       style={{ width: '80px', padding: '8px' }}
                       min="0.1"
                     />
+                  </div>
+                  <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: '600' }}>Staffing Min (L/A/C):</span>
+                    <input type="number" value={editMinLead} onChange={(e) => setEditMinLead(e.target.value)} placeholder="Lead" style={{ width: '60px', padding: '8px' }} min="0" />
+                    <input type="number" value={editMinAssistant} onChange={(e) => setEditMinAssistant(e.target.value)} placeholder="Asst" style={{ width: '60px', padding: '8px' }} min="0" />
+                    <input type="number" value={editMinCook} onChange={(e) => setEditMinCook(e.target.value)} placeholder="Cook" style={{ width: '60px', padding: '8px' }} min="0" />
+                    <span style={{ fontWeight: '600', marginRight: '10px' }}>Optimal:</span>
+                    <input type="number" value={editOptLead} onChange={(e) => setEditOptLead(e.target.value)} placeholder="Lead" style={{ width: '60px', padding: '8px' }} min="0" />
+                    <input type="number" value={editOptAssistant} onChange={(e) => setEditOptAssistant(e.target.value)} placeholder="Asst" style={{ width: '60px', padding: '8px' }} min="0" />
+                    <input type="number" value={editOptCook} onChange={(e) => setEditOptCook(e.target.value)} placeholder="Cook" style={{ width: '60px', padding: '8px' }} min="0" />
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button
@@ -246,7 +299,13 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                       {group.name || 'Unnamed Group'}
                     </div>
                     <div className="range" style={{ color: '#666', marginBottom: '5px', fontFamily: 'Assistant, sans-serif' }}>
-                      {group.label} • Max Capacity: {group.maxCapacity || 'Not set'} • Ratio: {group.ratio || 'Not set'}
+                      {group.label} • Max: {group.maxCapacity || '?'} • Ratio: {group.ratio ?? '?'} • Staff Min: {(() => {
+                        const sm = group.staffingMin || { lead: 1, assistant: 1, cook: 0 }
+                        return `${sm.lead}L/${sm.assistant}A/${sm.cook ?? 0}C`
+                      })()} • Opt: {(() => {
+                        const so = group.staffingOptimal || { lead: 2, assistant: 2, cook: 0 }
+                        return `${so.lead}L/${so.assistant}A/${so.cook ?? 0}C`
+                      })()}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -321,7 +380,7 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
               />
             </div>
             <div className="form-group">
-              <label>Regulation Ratio (children / employee)</label>
+              <label>Regulation Ratio</label>
               <input
                 type="number"
                 step="0.1"
@@ -331,6 +390,16 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
                 min="0.1"
               />
             </div>
+          </div>
+          <div className="form-row" style={{ marginBottom: '15px' }}>
+            <span style={{ fontWeight: '600', marginRight: '10px' }}>Staffing Min (Lead / Assistant / Cook):</span>
+            <input type="number" value={newMinLead} onChange={(e) => setNewMinLead(e.target.value)} placeholder="Lead" min="0" style={{ width: '70px' }} />
+            <input type="number" value={newMinAssistant} onChange={(e) => setNewMinAssistant(e.target.value)} placeholder="Asst" min="0" style={{ width: '70px' }} />
+            <input type="number" value={newMinCook} onChange={(e) => setNewMinCook(e.target.value)} placeholder="Cook" min="0" style={{ width: '70px' }} />
+            <span style={{ fontWeight: '600', marginRight: '10px' }}>Optimal:</span>
+            <input type="number" value={newOptLead} onChange={(e) => setNewOptLead(e.target.value)} placeholder="Lead" min="0" style={{ width: '70px' }} />
+            <input type="number" value={newOptAssistant} onChange={(e) => setNewOptAssistant(e.target.value)} placeholder="Asst" min="0" style={{ width: '70px' }} />
+            <input type="number" value={newOptCook} onChange={(e) => setNewOptCook(e.target.value)} placeholder="Cook" min="0" style={{ width: '70px' }} />
           </div>
           <button
             className="btn btn-primary"
