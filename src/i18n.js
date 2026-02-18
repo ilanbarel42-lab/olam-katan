@@ -168,13 +168,14 @@ export const t = {
 
   // Advisor tab
   advisor: 'יועץ',
-  dailySummary: 'סיכום יומי',
-  dailySummaryHint: 'רשום אירועי היום בטקסט חופשי. השמירה תשמר את הטקסט לפי התאריך.',
-  dailySummaryPlaceholder: 'לדוגמה: ילד דני נפל היום. נתתי מתנות לצוות. הבטחתי לאם של יוסי להתקשר.',
-  saveSummary: 'שמור סיכום',
-  quickAddEvent: 'הוספת אירוע מהירה',
+  addInformation: 'הוסף מידע ליועץ',
+  addInformationHint: 'כתוב או הקלט הכול במקום אחד – סיכום יומי, אירועים, הבטחות, מתנות. ציין תאריך בטקסט (היום, אתמול, 15 במרץ) או בחר בתאריך.',
+  addInformationPlaceholder: 'לדוגמה: היום דני נפל בחצר. הבטחתי לאם של יוסי להתקשר. נתתי מתנה לשרה. / או: תזכורת ל-15 במרץ – להזמין ציוד.',
+  dateForRecord: 'תאריך',
+  dateAutoFromText: 'אוטו (מהטקסט)',
   eventGeneral: 'כללי',
   eventChildIncident: 'אירוע ילד',
+  eventChildGift: 'מתנה לילד',
   eventStaffEvent: 'אירוע צוות',
   eventStaffGift: 'מתנה/גמול צוות',
   eventParentPromise: 'הבטחה להורה',
@@ -192,11 +193,19 @@ export const t = {
   eventType_daily_summary: 'סיכום יומי',
   eventType_general: 'כללי',
   eventType_child_incident: 'אירוע ילד',
+  eventType_child_gift: 'מתנה לילד',
   eventType_child_event: 'אירוע ילד',
   eventType_staff_event: 'אירוע צוות',
   eventType_staff_gift: 'מתנה/גמול',
   eventType_parent_promise: 'הבטחה להורה',
+  eventType_unstructured_record: 'הקלטה / רישום חופשי',
   events: 'אירועים',
+
+  recordVoice: 'הקלט',
+  recordVoiceStop: 'עצור',
+  saveRecord: 'שמור',
+  recordingInProgress: 'מקליט...',
+  transcriptionError: 'שגיאה בהמרה לטקסט',
 
   // Advisor reminders config
   advisorReminders: 'תזכורות יועץ',
@@ -214,7 +223,9 @@ export const t = {
   advisorDailyAdvise: 'ייעוץ יומי',
   advisorDailyAdviseHint: 'תזכורות והמלצות לתקופה הקרובה (מותאם בהגדרות).',
   askAdvisor: 'שאל את היועץ',
-  askAdvisorPlaceholder: 'לדוגמה: רשימת ילדים שלא קיבלו מתנה השנה',
+  askAdvisorHint: 'שאל כל שאלה על המידע בגן – ילדים, עובדים, אירועים, וההקלטות ששמרת.',
+  askAdvisorPlaceholder: 'למשל: מתי הבטחתי לאם של יוסי? מה כתבתי אתמול? מי לא קיבל מתנה?',
   askAdvisorSubmit: 'שלח',
-  advisorPromptRequiresApi: 'שאלות AI דורשות חיבור API. ראה ADVISOR_V2_DESIGN.md.'
+  advisorPromptRequiresApi: 'שאלות AI דורשות חיבור API. ראה ADVISOR_V2_DESIGN.md.',
+  advisorError: 'שגיאה. נסה שוב.'
 }

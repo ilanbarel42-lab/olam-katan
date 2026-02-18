@@ -156,8 +156,8 @@ export function getAdvice() {
     }
   }
 
-  // Recent daily summaries – remind of items that might need follow-up
-  const dailySummaries = events.filter(e => e.type === 'daily_summary').slice(-5)
+  // Recent summaries and unstructured records – remind of items that might need follow-up
+  const dailySummaries = events.filter(e => e.type === 'daily_summary' || e.type === 'unstructured_record').slice(-5)
   for (const ds of dailySummaries) {
     const desc = (ds.description || '').toLowerCase()
     if (/הבטחתי|להתקשר|לעדכן|לחזור/.test(desc) && !advice.some(a => a.date === ds.date && a.type === 'parent_promise')) {

@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/advisor.js": { "maxDuration": 30 },
+    "api/parse.js": { "maxDuration": 10 },
+    "api/transcribe.js": { "maxDuration": 60 }
+  }
+}

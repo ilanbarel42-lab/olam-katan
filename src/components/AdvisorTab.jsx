@@ -1,9 +1,11 @@
 /**
- * Advisor tab – daily summary, events, and intelligent advice.
- * V2: See ADVISOR_V2_DESIGN.md – free-style recording + LLM Q&A.
+ * Advisor tab – unified input, advice, and AI Q&A.
+ * V2: See ADVISOR_V2_DESIGN.md – one place for all input.
  */
 import React, { useState, useEffect } from 'react'
-import { getEvents, saveEvents, getChildren, getEmployees, shouldShowAdvisorReminder, getAdvisorConfig } from '../utils/storage'
+import { getEvents, saveEvents, getChildren, getEmployees, shouldShowAdvisorReminder } from '../utils/storage'
+import { askAdvisor } from '../services/advisorApi'
+import { parseDateFromText } from '../services/parseApi'
 import { getAdvice } from '../utils/adviceEngine'
 import { t } from '../i18n'
 
@@ -45,20 +47,37 @@ function todayAsDDMMYYYY() {
   return `${day}/${month}/${year}`
 }
 
+function dateOffset(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
+/** Client-side date extraction from Hebrew/English text (fallback when API unavailable) */
+function extractDateFromTextClient(text) {
+  if (!text || typeof text !== 'string') return null
+  const lower = text.toLowerCase().trim()
+  if (/\bהיום\b|\btoday\b|\bהיום\s*[''"]?s?\s*update/i.test(lower) || /^היום\s|^today\s/i.test(lower)) return todayAsDDMMYYYY()
+  if (/\bאתמול\b|\byesterday\b/i.test(lower)) return dateOffset(-1)
+  if (/\bמחר\b|\btomorrow\b/i.test(lower)) return dateOffset(1)
+  return null
+}
+
 function AdvisorTab() {
   const [events, setEvents] = useState([])
   const [advice, setAdvice] = useState([])
-  const [dailyText, setDailyText] = useState('')
-  const [dailyDate, setDailyDate] = useState(todayAsDDMMYYYY())
-  const [quickType, setQuickType] = useState('general')
-  const [quickEntityType, setQuickEntityType] = useState('child')
-  const [quickEntityId, setQuickEntityId] = useState('')
-  const [quickDesc, setQuickDesc] = useState('')
+  const [inputText, setInputText] = useState('')
+  const [inputDate, setInputDate] = useState(todayAsDDMMYYYY())
+  const [useAutoDate, setUseAutoDate] = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
   const [filterEntityType, setFilterEntityType] = useState(null)
   const [filterEntityId, setFilterEntityId] = useState('')
   const [showReminderBanner, setShowReminderBanner] = useState(false)
   const [promptQuery, setPromptQuery] = useState('')
   const [promptResponse, setPromptResponse] = useState('')
+  const [promptLoading, setPromptLoading] = useState(false)
+  const [isRecordingLive, setIsRecordingLive] = useState(false)
+  const [recognitionRef, setRecognitionRef] = useState(null)
 
   const children = getChildren()
   const employees = getEmployees()
@@ -79,52 +98,44 @@ function AdvisorTab() {
     setShowReminderBanner(false)
   }
 
-  const handleAskAdvisor = () => {
+  const handleAskAdvisor = async () => {
     const q = promptQuery.trim()
     if (!q) return
-    setPromptResponse(t.advisorPromptRequiresApi)
+    setPromptLoading(true)
+    setPromptResponse('')
+    try {
+      const { answer } = await askAdvisor(q)
+      setPromptResponse(answer)
+    } catch (err) {
+      setPromptResponse(t.advisorError || 'שגיאה. נסה שוב.')
+    } finally {
+      setPromptLoading(false)
+    }
   }
 
-  const handleSaveDailySummary = () => {
-    const text = dailyText.trim()
+  const handleSaveInput = async () => {
+    const text = inputText.trim()
     if (!text) return
-    const existing = getEvents() || []
-    const sameDay = existing.find(e => e.type === 'daily_summary' && e.date === dailyDate)
-    const updated = sameDay
-      ? existing.map(e => (e.id === sameDay.id ? { ...e, description: text, createdAt: new Date().toISOString() } : e))
-      : [
-          ...existing,
-          {
-            id: `ev-${Date.now()}`,
-            type: 'daily_summary',
-            date: dailyDate,
-            description: text,
-            createdAt: new Date().toISOString(),
-            source: 'manual'
-          }
-        ]
-    saveEvents(updated)
-    setDailyText('')
-    refresh()
-  }
-
-  const handleAddQuickEvent = () => {
-    const desc = quickDesc.trim()
-    if (!desc) return
+    setSaveLoading(true)
+    let dateToUse = inputDate
+    if (useAutoDate) {
+      const fromText = extractDateFromTextClient(text)
+      dateToUse = fromText || await parseDateFromText(text, inputDate)
+    }
+    setSaveLoading(false)
     const existing = getEvents() || []
     const newEvent = {
       id: `ev-${Date.now()}`,
-      type: quickType,
-      date: todayAsDDMMYYYY(),
-      entityType: quickEntityType === 'child' ? 'child' : 'employee',
-      entityId: quickEntityId || null,
-      description: desc,
+      type: 'unstructured_record',
+      date: dateToUse,
+      raw: text,
+      description: text,
+      scope: 'general',
       createdAt: new Date().toISOString(),
       source: 'manual'
     }
     saveEvents([...existing, newEvent])
-    setQuickDesc('')
-    setQuickEntityId('')
+    setInputText('')
     refresh()
   }
 
@@ -133,6 +144,41 @@ function AdvisorTab() {
     const updated = (getEvents() || []).filter(e => e.id !== id)
     saveEvents(updated)
     refresh()
+  }
+
+  const handleStartLiveRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('דפדפן זה לא תומך בהקלטת קול. נסה Chrome או Edge.')
+      return
+    }
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'he-IL'
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          const transcript = e.results[i][0].transcript
+          setInputText(prev => (prev ? prev + ' ' : '') + transcript)
+        }
+      }
+    }
+    recognition.onerror = (e) => {
+      if (e.error !== 'no-speech') setIsRecordingLive(false)
+    }
+    recognition.onend = () => setIsRecordingLive(false)
+    recognition.start()
+    setRecognitionRef(recognition)
+    setIsRecordingLive(true)
+  }
+
+  const handleStopLiveRecording = () => {
+    if (recognitionRef) {
+      recognitionRef.stop()
+      setRecognitionRef(null)
+    }
+    setIsRecordingLive(false)
   }
 
   const filteredEvents = (events || [])
@@ -207,9 +253,67 @@ function AdvisorTab() {
         )}
       </div>
 
+      <div className="advisor-section advisor-add-info">
+        <h2>{t.addInformation}</h2>
+        <p className="advisor-hint">{t.addInformationHint}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={useAutoDate}
+                onChange={e => setUseAutoDate(e.target.checked)}
+              />
+              <span>{t.dateAutoFromText}</span>
+            </label>
+            {!useAutoDate && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>{t.dateForRecord}:</span>
+                <input
+                  type="date"
+                  value={formatDateForInput(inputDate)}
+                  onChange={e => {
+                    const parts = e.target.value.split('-')
+                    if (parts.length === 3) setInputDate(`${parts[2]}/${parts[1]}/${parts[0]}`)
+                  }}
+                  style={{ padding: 6 }}
+                />
+              </label>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {!isRecordingLive ? (
+              <button type="button" className="btn btn-secondary" onClick={handleStartLiveRecording} title={t.recordVoice}>
+                🎤 {t.recordVoice}
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={handleStopLiveRecording} style={{ background: '#c00' }}>
+                ⏹ {t.recordVoiceStop}
+              </button>
+            )}
+            <span style={{ fontSize: 13, color: '#666' }}>{isRecordingLive ? t.recordingInProgress : ''}</span>
+          </div>
+          <textarea
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            placeholder={t.addInformationPlaceholder}
+            rows={5}
+            style={{ padding: 10, borderRadius: 8, fontFamily: 'inherit' }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveInput}
+            disabled={!inputText.trim() || saveLoading}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            {saveLoading ? (t.loading || 'טוען...') : t.saveRecord}
+          </button>
+        </div>
+      </div>
+
       <div className="advisor-section advisor-ask">
         <h2>{t.askAdvisor}</h2>
-        <p className="advisor-hint">למשל: רשימת ילדים שלא קיבלו מתנה השנה, מתי נתתי לאחרונה מתנה לעובד X</p>
+        <p className="advisor-hint">{t.askAdvisorHint}</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <textarea
             value={promptQuery}
@@ -218,80 +322,14 @@ function AdvisorTab() {
             rows={3}
             style={{ padding: 10, borderRadius: 8, fontFamily: 'inherit' }}
           />
-          <button className="btn btn-primary" onClick={handleAskAdvisor} style={{ alignSelf: 'flex-start' }}>
-            {t.askAdvisorSubmit}
+          <button className="btn btn-primary" onClick={handleAskAdvisor} disabled={promptLoading} style={{ alignSelf: 'flex-start' }}>
+            {promptLoading ? (t.loading || 'טוען...') : t.askAdvisorSubmit}
           </button>
           {promptResponse && (
             <div style={{ padding: 12, background: 'var(--color-gray-light)', borderRadius: 8, fontSize: 14 }}>
               {promptResponse}
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="advisor-section">
-        <h2>{t.dailySummary}</h2>
-        <p className="advisor-hint">{t.dailySummaryHint}</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-          <label>
-            {t.date}:
-            <input
-              type="date"
-              value={formatDateForInput(dailyDate)}
-              onChange={e => {
-                const parts = e.target.value.split('-')
-                if (parts.length === 3) setDailyDate(`${parts[2]}/${parts[1]}/${parts[0]}`)
-              }}
-              style={{ marginRight: 8, padding: 6 }}
-            />
-          </label>
-          <textarea
-            value={dailyText}
-            onChange={e => setDailyText(e.target.value)}
-            placeholder={t.dailySummaryPlaceholder}
-            rows={4}
-            style={{ padding: 10, borderRadius: 8, fontFamily: 'inherit' }}
-          />
-          <button className="btn btn-primary" onClick={handleSaveDailySummary}>
-            {t.saveSummary}
-          </button>
-        </div>
-      </div>
-
-      <div className="advisor-section">
-        <h2>{t.quickAddEvent}</h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginBottom: 16 }}>
-          <select value={quickType} onChange={e => setQuickType(e.target.value)} style={{ padding: 6 }}>
-            <option value="general">{t.eventGeneral}</option>
-            <option value="child_incident">{t.eventChildIncident}</option>
-            <option value="staff_event">{t.eventStaffEvent}</option>
-            <option value="staff_gift">{t.eventStaffGift}</option>
-            <option value="parent_promise">{t.eventParentPromise}</option>
-          </select>
-          {(quickType === 'child_incident' || quickType === 'parent_promise') && (
-            <select value={quickEntityId} onChange={e => setQuickEntityId(e.target.value)} style={{ padding: 6 }}>
-              <option value="">{t.select} {t.child}</option>
-              {children.map(c => (
-                <option key={c.id} value={c.id}>{c.childName || t.unnamed}</option>
-              ))}
-            </select>
-          )}
-          {(quickType === 'staff_event' || quickType === 'staff_gift') && (
-            <select value={quickEntityId} onChange={e => setQuickEntityId(e.target.value)} style={{ padding: 6 }}>
-              <option value="">{t.select} {t.employee}</option>
-              {employees.filter(e => e.status !== 'discontinued').map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.name || t.unnamed}</option>
-              ))}
-            </select>
-          )}
-          <input
-            type="text"
-            value={quickDesc}
-            onChange={e => setQuickDesc(e.target.value)}
-            placeholder={t.eventDescriptionPlaceholder}
-            style={{ flex: 1, minWidth: 150, padding: 6 }}
-          />
-          <button className="btn btn-primary" onClick={handleAddQuickEvent}>{t.add}</button>
         </div>
       </div>
 
@@ -339,9 +377,10 @@ function AdvisorTab() {
                     const child = ev.entityType === 'child' ? children.find(c => c.id === ev.entityId) : null
                     const emp = ev.entityType === 'employee' ? employees.find(e => e.id === ev.entityId) : null
                     const entityLabel = child ? child.childName : emp ? emp.name : ''
+                    const typeLabel = t[`eventType_${ev.type}`] || ev.type
                     return (
                       <li key={ev.id} className="event-item">
-                        <span className={`event-type-badge type-${ev.type}`}>{t[`eventType_${ev.type}`] || ev.type}</span>
+                        <span className={`event-type-badge type-${ev.type}`}>{typeLabel}</span>
                         {entityLabel && <span className="event-entity">{entityLabel}</span>}
                         <span className="event-desc">{ev.description}</span>
                         <button
