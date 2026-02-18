@@ -7,7 +7,17 @@ const STORAGE_KEYS = {
   CHILDREN: 'olam-katan-children',
   AGE_GROUPS: 'olam-katan-age-groups',
   EMPLOYEES: 'olam-katan-employees',
-  SCHEDULE: 'olam-katan-schedule'
+  SCHEDULE: 'olam-katan-schedule',
+  EVENTS: 'olam-katan-events',
+  ADVISOR_CONFIG: 'olam-katan-advisor-config'
+}
+
+export const DEFAULT_ADVISOR_CONFIG = {
+  enabled: true,
+  days: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'],
+  hour: 17,
+  minute: 0,
+  adviceWindowDays: 14
 }
 
 // In-memory cache (populated by loadAll, updated by saves)
@@ -15,7 +25,8 @@ const cache = {
   children: [],
   age_groups: [],
   employees: [],
-  schedule: {}
+  schedule: {},
+  events: []
 }
 
 function readFromLocalStorage() {
@@ -35,6 +46,17 @@ function readFromLocalStorage() {
     const s = localStorage.getItem(STORAGE_KEYS.SCHEDULE)
     cache.schedule = s ? JSON.parse(s) : {}
   } catch { cache.schedule = {} }
+  try {
+    const e = localStorage.getItem(STORAGE_KEYS.EVENTS)
+    cache.events = e ? JSON.parse(e) : []
+  } catch { cache.events = [] }
+}
+
+function readAdvisorConfig() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.ADVISOR_CONFIG)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
 }
 
 function writeToLocalStorage() {
@@ -43,14 +65,15 @@ function writeToLocalStorage() {
     localStorage.setItem(STORAGE_KEYS.AGE_GROUPS, JSON.stringify(cache.age_groups))
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(cache.employees))
     localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(cache.schedule))
+    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(cache.events))
   } catch (e) {
     console.error('Error saving to localStorage:', e)
   }
 }
 
-const DATA_KEYS = ['children', 'age_groups', 'employees', 'schedule']
+const DATA_KEYS = ['children', 'age_groups', 'employees', 'schedule', 'events']
 
-const KEY_TO_STORAGE = { children: STORAGE_KEYS.CHILDREN, age_groups: STORAGE_KEYS.AGE_GROUPS, employees: STORAGE_KEYS.EMPLOYEES, schedule: STORAGE_KEYS.SCHEDULE }
+const KEY_TO_STORAGE = { children: STORAGE_KEYS.CHILDREN, age_groups: STORAGE_KEYS.AGE_GROUPS, employees: STORAGE_KEYS.EMPLOYEES, schedule: STORAGE_KEYS.SCHEDULE, events: STORAGE_KEYS.EVENTS }
 
 function getLocalValue(key) {
   try {
@@ -67,9 +90,9 @@ async function loadFromSupabase() {
 
   if (rows.length === 0) {
     readFromLocalStorage()
-    if (cache.children?.length || cache.employees?.length || cache.age_groups?.length || Object.keys(cache.schedule || {}).length) {
+    if (cache.children?.length || cache.employees?.length || cache.age_groups?.length || Object.keys(cache.schedule || {}).length || cache.events?.length) {
       for (const key of DATA_KEYS) {
-        const val = key === 'children' ? cache.children : key === 'age_groups' ? cache.age_groups : key === 'employees' ? cache.employees : cache.schedule
+        const val = key === 'children' ? cache.children : key === 'age_groups' ? cache.age_groups : key === 'employees' ? cache.employees : key === 'events' ? cache.events : cache.schedule
         await saveToSupabase(key, val).catch(e => console.error(`Supabase backfill ${key}:`, e))
       }
       writeToLocalStorage()
@@ -85,6 +108,7 @@ async function loadFromSupabase() {
         if (key === 'children') cache.children = Array.isArray(local) ? local : []
         else if (key === 'age_groups') cache.age_groups = Array.isArray(local) ? local : []
         else if (key === 'employees') cache.employees = Array.isArray(local) ? local : []
+        else if (key === 'events') cache.events = Array.isArray(local) ? local : []
         else cache.schedule = local && typeof local === 'object' ? local : {}
         await saveToSupabase(key, cache[key]).catch(e => console.error(`Supabase backfill ${key}:`, e))
         writeToLocalStorage()
@@ -95,6 +119,7 @@ async function loadFromSupabase() {
   if (!cache.age_groups) cache.age_groups = []
   if (!cache.employees) cache.employees = []
   if (!cache.schedule) cache.schedule = {}
+  if (!cache.events) cache.events = []
 }
 
 const SAVE_RETRIES = 3
@@ -128,13 +153,14 @@ export async function loadAll() {
   }
 }
 
-/** Push all four keys to Supabase. Ensures no key is ever left behind (fixes asymmetry bug). */
+/** Push all keys to Supabase. Ensures no key is ever left behind. */
 async function syncAllToSupabase() {
   const pairs = [
     ['children', cache.children],
     ['age_groups', cache.age_groups],
     ['employees', cache.employees],
-    ['schedule', cache.schedule]
+    ['schedule', cache.schedule],
+    ['events', cache.events]
   ]
   for (const [key, val] of pairs) {
     await saveToSupabase(key, val).catch(e => console.error(`Supabase sync ${key}:`, e))
@@ -146,6 +172,7 @@ export const getChildren = () => cache.children
 export const getAgeGroups = () => cache.age_groups
 export const getEmployees = () => cache.employees
 export const getSchedule = () => cache.schedule
+export const getEvents = () => cache.events
 
 // Sync setters (update cache + persist to both Supabase and localStorage)
 export function saveChildren(children) {
@@ -178,4 +205,46 @@ export function saveSchedule(schedule) {
   if (isSupabaseEnabled()) {
     saveToSupabase('schedule', schedule).catch(e => console.error('Supabase save schedule:', e))
   }
+}
+
+export function saveEvents(events) {
+  cache.events = events
+  writeToLocalStorage()
+  if (isSupabaseEnabled()) {
+    saveToSupabase('events', events).catch(e => console.error('Supabase save events:', e))
+  }
+}
+
+export function getAdvisorConfig() {
+  const c = readAdvisorConfig()
+  if (!c) return { ...DEFAULT_ADVISOR_CONFIG }
+  return {
+    enabled: c.enabled !== false,
+    days: Array.isArray(c.days) ? c.days : DEFAULT_ADVISOR_CONFIG.days,
+    hour: typeof c.hour === 'number' ? c.hour : DEFAULT_ADVISOR_CONFIG.hour,
+    minute: typeof c.minute === 'number' ? c.minute : DEFAULT_ADVISOR_CONFIG.minute,
+    adviceWindowDays: typeof c.adviceWindowDays === 'number' ? c.adviceWindowDays : DEFAULT_ADVISOR_CONFIG.adviceWindowDays
+  }
+}
+
+export function saveAdvisorConfig(config) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.ADVISOR_CONFIG, JSON.stringify(config))
+  } catch (e) {
+    console.error('Error saving advisor config:', e)
+  }
+}
+
+export function shouldShowAdvisorReminder() {
+  const config = getAdvisorConfig()
+  if (!config.enabled) return false
+  const now = new Date()
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  const today = dayNames[now.getDay()]
+  if (!config.days.includes(today)) return false
+  const currentHour = now.getHours()
+  const currentMinute = now.getMinutes()
+  const configMinutes = config.hour * 60 + config.minute
+  const nowMinutes = currentHour * 60 + currentMinute
+  return nowMinutes >= configMinutes && nowMinutes < configMinutes + 60
 }

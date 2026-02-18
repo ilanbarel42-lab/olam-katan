@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react'
 import AgeGroupWidget from './AgeGroupWidget'
 import { getChildren, saveChildren } from '../utils/storage'
-import { getReferenceDate } from '../config'
 import { t } from '../i18n'
+
+// Transition date: Sept 1st ( Israeli year switch ). Returns next occurrence.
+function getNextTransitionDate() {
+  const today = new Date()
+  const sep1ThisYear = new Date(today.getFullYear(), 8, 1) // month 8 = Sept
+  if (today < sep1ThisYear) return sep1ThisYear
+  return new Date(today.getFullYear() + 1, 8, 1)
+}
 
 function ChildrenTab({ ageGroups }) {
   const [children, setChildren] = useState([])
@@ -16,19 +23,32 @@ function ChildrenTab({ ageGroups }) {
     setChildren(loadedChildren)
   }, [])
 
+  // Ref date for group calc: entryDate if valid, else today
+  const getEntryRefDate = (entryDateStr) => {
+    if (!entryDateStr) return new Date()
+    const d = parseEuropeanDate(entryDateStr)
+    return d || new Date()
+  }
+
   const handleCellChange = (childId, field, value) => {
     const updatedChildren = children.map(child => {
       if (child.id === childId) {
         const updated = { ...child, [field]: value }
         
-        // Auto-update group based on reference date (1.9.2026) if date of birth changes
+        // When DOB or entryDate changes, recalculate group (age at entry date) and nextGroup (Sept 1st)
         if (field === 'dateOfBirth') {
-          const recommendation = calculateGroupForReferenceDate(value, ageGroups)
-          if (recommendation) {
-            updated.group = recommendation.id
-          } else {
-            updated.group = ''
-          }
+          const refDate = getEntryRefDate(updated.entryDate)
+          const groupResult = calculateGroupAtDate(value, refDate, ageGroups)
+          updated.group = groupResult ? groupResult.id : ''
+          const nextResult = calculateGroupAtDate(value, getNextTransitionDate(), ageGroups)
+          updated.nextGroup = nextResult ? nextResult.id : ''
+        }
+        if (field === 'entryDate') {
+          const refDate = getEntryRefDate(value)
+          const groupResult = refDate && updated.dateOfBirth
+            ? calculateGroupAtDate(updated.dateOfBirth, refDate, ageGroups)
+            : null
+          updated.group = groupResult ? groupResult.id : ''
         }
         
         return updated
@@ -66,8 +86,10 @@ function ChildrenTab({ ageGroups }) {
       id: `new-${Date.now()}`,
       childName: '',
       dateOfBirth: '',
+      entryDate: '',
       registerStatus: 'candidate',
       group: '',
+      nextGroup: '',
       parent1Name: '',
       parent1Phone: '',
       parent2Name: '',
@@ -134,15 +156,18 @@ function ChildrenTab({ ageGroups }) {
         if (!name) continue // Skip rows without names
         
         const dob = dobIndex !== -1 ? values[dobIndex]?.trim() : ''
-        const recommendation = dob ? calculateGroupForReferenceDate(dob, ageGroups) : null
-        const calculatedGroup = recommendation ? recommendation.id : ''
-        
+        const entryDate = '' // no entry date in CSV; group uses today
+        const refDate = entryDate ? (parseEuropeanDate(entryDate) || new Date()) : new Date()
+        const groupResult = dob ? calculateGroupAtDate(dob, refDate, ageGroups) : null
+        const nextResult = dob ? calculateGroupAtDate(dob, getNextTransitionDate(), ageGroups) : null
         importedChildren.push({
           id: Date.now().toString() + '-' + i,
           childName: name,
           dateOfBirth: dob,
+          entryDate,
           registerStatus: 'candidate',
-          group: calculatedGroup,
+          group: groupResult ? groupResult.id : '',
+          nextGroup: nextResult ? nextResult.id : '',
           parent1Name: '',
           parent1Phone: '',
           parent2Name: '',
@@ -171,55 +196,36 @@ function ChildrenTab({ ageGroups }) {
     reader.readAsText(file)
   }
 
-  const calculateGroup = (dateOfBirth, groups) => {
-    if (!dateOfBirth) return ''
-    
-    const birthDate = parseEuropeanDate(dateOfBirth)
-    if (!birthDate) return ''
-    
-    const today = new Date()
-    const ageInMonths = (today.getFullYear() - birthDate.getFullYear()) * 12 + 
-                       (today.getMonth() - birthDate.getMonth())
-    
-    for (const group of groups) {
-      if (ageInMonths >= group.minAge && ageInMonths <= group.maxAge) {
-        return group.id
-      }
-    }
-    
-    return ''
+  // Calculate age in months at a given reference date (day-of-month aware)
+  const ageInMonthsAt = (birthDate, refDate) => {
+    if (!birthDate || !refDate) return null
+    let ageInMonths = (refDate.getFullYear() - birthDate.getFullYear()) * 12 +
+      (refDate.getMonth() - birthDate.getMonth())
+    if (refDate.getDate() < birthDate.getDate()) ageInMonths--
+    return ageInMonths
   }
 
-  // Calculate group based on configured reference date
-  const calculateGroupForReferenceDate = (dateOfBirth, groups) => {
-    if (!dateOfBirth) return null
-    
+  // Calculate group based on child's age at a given date. Returns { id, name, ageInMonths } or null.
+  const calculateGroupAtDate = (dateOfBirth, refDate, groups) => {
+    const result = calculateGroupOrAgeStatus(dateOfBirth, refDate, groups)
+    return result?.status === 'match' ? { id: result.id, name: result.name, ageInMonths: result.ageInMonths } : null
+  }
+
+  // Returns { status: 'match'|'tooSmall'|'tooBig', id?, name?, ageInMonths } or null
+  const calculateGroupOrAgeStatus = (dateOfBirth, refDate, groups) => {
+    if (!dateOfBirth || !refDate || !groups?.length) return null
     const birthDate = parseEuropeanDate(dateOfBirth)
     if (!birthDate) return null
-    
-    const referenceDate = getReferenceDate()
-    
-    // Calculate age in months as of reference date, accounting for day of month
-    let ageInMonths = (referenceDate.getFullYear() - birthDate.getFullYear()) * 12 + 
-                       (referenceDate.getMonth() - birthDate.getMonth())
-    
-    // If the day hasn't occurred yet this month, subtract one month
-    if (referenceDate.getDate() < birthDate.getDate()) {
-      ageInMonths--
-    }
-    
-    // Find matching group
+    const ageInMonths = ageInMonthsAt(birthDate, refDate)
+    if (ageInMonths === null) return null
     for (const group of groups) {
       if (ageInMonths >= group.minAge && ageInMonths <= group.maxAge) {
-        return {
-          id: group.id,
-          name: group.name || group.label,
-          ageInMonths: ageInMonths
-        }
+        return { status: 'match', id: group.id, name: group.name || group.label, ageInMonths }
       }
     }
-    
-    return null
+    const minAge = Math.min(...groups.map(g => g.minAge))
+    const maxAge = Math.max(...groups.map(g => g.maxAge))
+    return { status: ageInMonths < minAge ? 'tooSmall' : 'tooBig', ageInMonths }
   }
 
   const parseEuropeanDate = (dateString) => {
@@ -295,85 +301,31 @@ function ChildrenTab({ ageGroups }) {
     return group ? (group.name || group.label || '') : ''
   }
 
-  // Calculate expected entry to kindergarten: when child reaches minAge of their allocated group
-  const calculateExpectedEntryDate = (child) => {
-    if (!child.dateOfBirth || !child.group) return null
-
-    const birthDate = parseEuropeanDate(child.dateOfBirth)
-    if (!birthDate) return null
-
-    const group = ageGroups.find(g => g.id === child.group)
-    if (!group) return null
-
-    const targetYear = birthDate.getFullYear() + Math.floor((birthDate.getMonth() + group.minAge) / 12)
-    const targetMonth = (birthDate.getMonth() + group.minAge) % 12
-    const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
-    const targetDay = Math.min(birthDate.getDate(), daysInTargetMonth)
-
-    const entryDate = new Date(targetYear, targetMonth, targetDay)
-    const day = String(entryDate.getDate()).padStart(2, '0')
-    const month = String(entryDate.getMonth() + 1).padStart(2, '0')
-    const year = entryDate.getFullYear()
-    return `${day}/${month}/${year}`
-  }
-
-  // Check if child's age at reference date matches their allocated group's age range (anomaly if not)
+  // Check if child's age at entry date matches their allocated group's age range (anomaly if not)
   const hasGroupAgeMismatch = (child) => {
     if (!child.group) return false
-    const ageInMonths = calculateAgeInMonths(child.dateOfBirth)
+    const birthDate = parseEuropeanDate(child.dateOfBirth)
+    if (!birthDate) return false
+    const refDate = getEntryRefDate(child.entryDate)
+    const ageInMonths = ageInMonthsAt(birthDate, refDate)
     if (ageInMonths === null) return false
     const group = ageGroups.find(g => g.id === child.group)
     if (!group) return false
     return ageInMonths < group.minAge || ageInMonths > group.maxAge
   }
 
-  // Get recommended group for child based on age at reference date (for anomaly display)
+  // Get recommended group for child based on age at entry date (for anomaly display)
   const getRecommendedGroupForChild = (child) => {
-    return calculateGroupForReferenceDate(child.dateOfBirth, ageGroups)
+    const refDate = getEntryRefDate(child.entryDate)
+    return calculateGroupAtDate(child.dateOfBirth, refDate, ageGroups)
   }
 
-  // Calculate the date when child will be eligible for next age group
-  const calculateNextGroupTransitionDate = (child) => {
-    if (!child.dateOfBirth || !child.group) return null
-    
-    const birthDate = parseEuropeanDate(child.dateOfBirth)
-    if (!birthDate) return null
-    
-    const currentGroup = ageGroups.find(g => g.id === child.group)
-    if (!currentGroup) return null
-    
-    // Sort groups by minAge to find the next one
-    const sortedGroups = [...ageGroups].sort((a, b) => a.minAge - b.minAge)
-    
-    // Find the next group (one with minAge > current group's maxAge)
-    const nextGroup = sortedGroups.find(g => g.minAge > currentGroup.maxAge)
-    
-    if (!nextGroup) {
-      // Child is already in the highest age group
-      return null
-    }
-    
-    // Calculate the date when child will reach nextGroup.minAge months old
-    // Add months to birth date
-    const transitionDate = new Date(birthDate)
-    
-    // Calculate target year and month
-    const targetYear = birthDate.getFullYear() + Math.floor((birthDate.getMonth() + nextGroup.minAge) / 12)
-    const targetMonth = (birthDate.getMonth() + nextGroup.minAge) % 12
-    
-    // Handle day overflow - if the day doesn't exist in target month, use last day of that month
-    const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
-    const targetDay = Math.min(birthDate.getDate(), daysInTargetMonth)
-    
-    transitionDate.setFullYear(targetYear)
-    transitionDate.setMonth(targetMonth)
-    transitionDate.setDate(targetDay)
-    
-    // Format as DD/MM/YYYY
-    const day = String(transitionDate.getDate()).padStart(2, '0')
-    const month = String(transitionDate.getMonth() + 1).padStart(2, '0')
-    const year = transitionDate.getFullYear()
-    
+  // The transition date (Sept 1st) used for "next group" calculation - for display
+  const getTransitionDateDisplay = () => {
+    const d = getNextTransitionDate()
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
     return `${day}/${month}/${year}`
   }
 
@@ -383,25 +335,12 @@ function ChildrenTab({ ageGroups }) {
     return dateString
   }
 
-  // Calculate age in months for a child based on configured reference date
+  // Calculate age in months for a child as of today (for sorting, display)
   const calculateAgeInMonths = (dateOfBirth) => {
     if (!dateOfBirth) return null
-    
     const birthDate = parseEuropeanDate(dateOfBirth)
     if (!birthDate) return null
-    
-    const referenceDate = getReferenceDate()
-    
-    // Calculate age in months as of reference date, accounting for day of month
-    let ageInMonths = (referenceDate.getFullYear() - birthDate.getFullYear()) * 12 + 
-                       (referenceDate.getMonth() - birthDate.getMonth())
-    
-    // If the day hasn't occurred yet this month, subtract one month
-    if (referenceDate.getDate() < birthDate.getDate()) {
-      ageInMonths--
-    }
-    
-    return ageInMonths
+    return ageInMonthsAt(birthDate, new Date())
   }
 
   // Filter children based on selected group
@@ -521,7 +460,7 @@ function ChildrenTab({ ageGroups }) {
               <th style={{ width: '110px' }}>{t.registerStatus}</th>
               <th style={{ width: '80px' }}>{t.group}</th>
               <th style={{ width: '115px' }} title={t.expectedEntryTooltip}>{t.expectedEntry}</th>
-              <th style={{ width: '120px' }}>{t.nextGroupDate}</th>
+              <th style={{ width: '110px' }} title={t.nextGroupTooltip}>{t.nextGroup} ({getTransitionDateDisplay()})</th>
               <th style={{ width: '100px' }}>{t.parent1Name}</th>
               <th style={{ width: '100px' }}>{t.parent1Phone}</th>
               <th style={{ width: '100px' }}>{t.parent2Name}</th>
@@ -618,7 +557,7 @@ function ChildrenTab({ ageGroups }) {
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                       <select
                         className="editable-select"
                         value={child.group || ''}
@@ -626,6 +565,7 @@ function ChildrenTab({ ageGroups }) {
                         title={getFullGroupName(child.group)}
                         style={{
                           flex: 1,
+                          minWidth: '80px',
                           fontSize: '12px',
                           padding: '8px 6px',
                           ...(hasGroupAgeMismatch(child) ? { borderColor: 'var(--color-danger)', color: 'var(--color-danger)', fontWeight: '600' } : {})
@@ -638,6 +578,37 @@ function ChildrenTab({ ageGroups }) {
                           </option>
                         ))}
                       </select>
+                      {(() => {
+                        const status = calculateGroupOrAgeStatus(child.dateOfBirth, getEntryRefDate(child.entryDate), ageGroups)
+                        if (status?.status === 'tooSmall') return <span style={{ color: 'var(--color-danger)', fontSize: '12px' }}>{t.ageTooSmall}</span>
+                        if (status?.status === 'tooBig') return <span style={{ color: 'var(--color-danger)', fontSize: '12px' }}>{t.ageTooBig}</span>
+                        if (hasGroupAgeMismatch(child)) {
+                          const rec = getRecommendedGroupForChild(child)
+                          const recText = rec ? t.recommendedShort(rec.name, rec.ageInMonths) : t.ageOutsideRanges
+                          return (
+                            <span className="group-mismatch-warning" title={t.ageMismatch(recText)}>⚠</span>
+                          )
+                        }
+                        return null
+                      })()}
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="date"
+                        className="editable-input"
+                        value={convertToDateInputFormat(child.entryDate)}
+                        onChange={(e) => {
+                          const converted = convertFromDateInputFormat(e.target.value)
+                          handleCellChange(child.id, 'entryDate', converted)
+                        }}
+                        style={{
+                          fontSize: '12px',
+                          padding: '8px 6px',
+                          ...(hasGroupAgeMismatch(child) ? { borderColor: 'var(--color-danger)', color: 'var(--color-danger)' } : {})
+                        }}
+                      />
                       {hasGroupAgeMismatch(child) && (() => {
                         const rec = getRecommendedGroupForChild(child)
                         const recText = rec ? t.recommendedShort(rec.name, rec.ageInMonths) : t.ageOutsideRanges
@@ -652,47 +623,29 @@ function ChildrenTab({ ageGroups }) {
                       })()}
                     </div>
                   </td>
-                  <td
-                    style={{
-                      fontSize: '12px',
-                      padding: '8px 6px',
-                      color: hasGroupAgeMismatch(child) ? 'var(--color-danger)' : '#666',
-                      textAlign: 'center',
-                      fontWeight: hasGroupAgeMismatch(child) ? '600' : 'normal'
-                    }}
-                  >
-                    {(() => {
-                      const entryDate = calculateExpectedEntryDate(child)
-                      const rec = hasGroupAgeMismatch(child) ? getRecommendedGroupForChild(child) : null
-                      if (entryDate === null) return <span style={{ color: '#999', fontStyle: 'italic' }}>{t.na}</span>
-                      return (
-                        <span
-                          className={hasGroupAgeMismatch(child) ? 'expected-entry-anomaly' : ''}
-                          title={rec ? t.recommended(rec.name, rec.ageInMonths) : undefined}
-                        >
-                          {entryDate}
-                          {hasGroupAgeMismatch(child) && (
-                            <>
-                              {' ⚠'}
-                              {rec && (
-                                <span className="anomaly-recommended" title={t.recommendedShort(rec.name, null)}>
-                                  {' → '}{rec.name}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </span>
-                      )
-                    })()}
-                  </td>
-                  <td style={{ fontSize: '12px', padding: '8px 6px', color: '#666', textAlign: 'center' }}>
-                    {(() => {
-                      const transitionDate = calculateNextGroupTransitionDate(child)
-                      if (transitionDate === null) {
-                        return <span style={{ color: '#999', fontStyle: 'italic' }}>{t.na}</span>
-                      }
-                      return transitionDate
-                    })()}
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      <select
+                        className="editable-select"
+                        value={child.nextGroup || ''}
+                        onChange={(e) => handleCellChange(child.id, 'nextGroup', e.target.value)}
+                        title={getFullGroupName(child.nextGroup)}
+                        style={{ flex: 1, minWidth: '80px', fontSize: '12px', padding: '8px 6px' }}
+                      >
+                        <option value="">{t.select}</option>
+                        {ageGroups.map(group => (
+                          <option key={group.id} value={group.id}>
+                            {group.name || group.label}
+                          </option>
+                        ))}
+                      </select>
+                      {(() => {
+                        const status = calculateGroupOrAgeStatus(child.dateOfBirth, getNextTransitionDate(), ageGroups)
+                        if (status?.status === 'tooSmall') return <span style={{ color: 'var(--color-danger)', fontSize: '12px' }}>{t.ageTooSmall}</span>
+                        if (status?.status === 'tooBig') return <span style={{ color: 'var(--color-danger)', fontSize: '12px' }}>{t.ageTooBig}</span>
+                        return null
+                      })()}
+                    </div>
                   </td>
                   <td className="truncate">
                     <input

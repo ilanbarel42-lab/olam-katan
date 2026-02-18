@@ -3,7 +3,8 @@ import ChildrenTab from './components/ChildrenTab'
 import EmployeesTab from './components/EmployeesTab'
 import ScheduleTab from './components/ScheduleTab'
 import SettingsTab from './components/SettingsTab'
-import { loadAll, getAgeGroups, getEmployees, saveAgeGroups } from './utils/storage'
+import AdvisorTab from './components/AdvisorTab'
+import { loadAll, getAgeGroups, getEmployees, saveAgeGroups, shouldShowAdvisorReminder } from './utils/storage'
 import { config } from './config'
 import { t } from './i18n'
 
@@ -12,10 +13,18 @@ function App() {
   const [activeTab, setActiveTab] = useState('children')
   const [ageGroups, setAgeGroups] = useState([])
   const [employees, setEmployees] = useState([])
+  const [showAdvisorReminder, setShowAdvisorReminder] = useState(false)
 
   useEffect(() => {
-    loadAll().then(() => setReady(true))
+    loadAll().then(() => {
+      setReady(true)
+      setShowAdvisorReminder(shouldShowAdvisorReminder())
+    })
   }, [])
+
+  useLayoutEffect(() => {
+    if (ready && activeTab === 'advisor') setShowAdvisorReminder(false)
+  }, [ready, activeTab])
 
   // Refresh employees and age groups when switching to Schedule so tab always has latest data
   useLayoutEffect(() => {
@@ -57,15 +66,52 @@ function App() {
   const tabs = [
     { id: 'children', label: t.children },
     { id: 'employees', label: t.employees },
-    { id: 'team', label: t.team },
     { id: 'schedule', label: t.schedule },
+    { id: 'advisor', label: t.advisor },
     { id: 'settings', label: t.settings }
   ]
 
   return (
     <div className="app">
-      {/* Compact sticky app bar: brand + tabs in one row */}
-      <div className="app-header-sticky">
+      {showAdvisorReminder && activeTab !== 'advisor' && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1001,
+            background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)',
+            color: 'white',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 8,
+            fontSize: 14
+          }}
+        >
+          <span>תזכורת יועץ – קבל עדכון לשבועיים הקרובים</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn"
+              style={{ background: 'white', color: 'var(--color-primary)', padding: '6px 14px', fontSize: 13 }}
+              onClick={() => { setActiveTab('advisor'); setShowAdvisorReminder(false) }}
+            >
+              {t.advisor} →
+            </button>
+            <button
+              className="btn"
+              style={{ background: 'rgba(255,255,255,0.3)', padding: '6px 14px', fontSize: 13 }}
+              onClick={() => setShowAdvisorReminder(false)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="app-header-sticky" style={showAdvisorReminder && activeTab !== 'advisor' ? { top: 40 } : {}}>
         <header className="brand-header">
           <div className="brand-header-content">
             <h1 className="brand-title">עולם קטן</h1>
@@ -90,7 +136,7 @@ function App() {
         </header>
       </div>
 
-      <div className="tab-content">
+      <div className="tab-content" style={showAdvisorReminder && activeTab !== 'advisor' ? { paddingTop: 108 } : {}}>
         {!ready ? (
           <div className="empty-state" style={{ padding: '2rem' }}>
             <p>{t.loading}</p>
@@ -99,17 +145,14 @@ function App() {
           <ChildrenTab ageGroups={ageGroups} />
         ) : activeTab === 'employees' ? (
           <EmployeesTab onEmployeesChange={handleEmployeesChange} />
-        ) : activeTab === 'team' ? (
-          <div className="empty-state">
-            <h3>{t.team}</h3>
-            <p>{t.comingSoon}</p>
-          </div>
         ) : activeTab === 'schedule' ? (
           <ScheduleTab
             ageGroups={ageGroups}
             employees={employees}
             onMountRefresh={handleEmployeesChange}
           />
+        ) : activeTab === 'advisor' ? (
+          <AdvisorTab />
         ) : activeTab === 'settings' ? (
           <SettingsTab 
             ageGroups={ageGroups} 

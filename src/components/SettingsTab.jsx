@@ -1,6 +1,14 @@
-import React, { useState } from 'react'
-import { getChildren } from '../utils/storage'
+import React, { useState, useEffect } from 'react'
+import { getChildren, getAdvisorConfig, saveAdvisorConfig, DEFAULT_ADVISOR_CONFIG } from '../utils/storage'
 import { t } from '../i18n'
+
+const DAY_OPTIONS = [
+  { value: 'sunday', label: t.sunday },
+  { value: 'monday', label: t.monday },
+  { value: 'tuesday', label: t.tuesday },
+  { value: 'wednesday', label: t.wednesday },
+  { value: 'thursday', label: t.thursday }
+]
 
 function SettingsTab({ ageGroups, onAgeGroupsChange }) {
   const [newName, setNewName] = useState('')
@@ -22,6 +30,25 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
   const [editMinAssistant, setEditMinAssistant] = useState('')
   const [editOptLead, setEditOptLead] = useState('')
   const [editOptAssistant, setEditOptAssistant] = useState('')
+  const [advisorConfig, setAdvisorConfig] = useState(() => getAdvisorConfig())
+  const [advisorSectionOpen, setAdvisorSectionOpen] = useState(false)
+
+  useEffect(() => {
+    setAdvisorConfig(getAdvisorConfig())
+  }, [])
+
+  const handleAdvisorConfigChange = (field, value) => {
+    const next = { ...advisorConfig, [field]: value }
+    setAdvisorConfig(next)
+    saveAdvisorConfig(next)
+  }
+
+  const toggleAdvisorDay = (day) => {
+    const days = advisorConfig.days.includes(day)
+      ? advisorConfig.days.filter(d => d !== day)
+      : [...advisorConfig.days, day]
+    handleAdvisorConfigChange('days', days)
+  }
 
   const handleAddGroup = () => {
     const minAge = parseInt(newMinAge, 10)
@@ -330,6 +357,83 @@ function SettingsTab({ ageGroups, onAgeGroupsChange }) {
           ))}
         </ul>
         
+        <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '20px', marginTop: 24 }}>
+          <h3
+            style={{
+              marginBottom: 12,
+              fontSize: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+            onClick={() => setAdvisorSectionOpen(!advisorSectionOpen)}
+          >
+            <span style={{ transform: advisorSectionOpen ? 'rotate(90deg)' : 'none', display: 'inline-block' }}>▶</span>
+            {t.advisorReminders}
+          </h3>
+          {advisorSectionOpen && (
+            <div className="advisor-config-section" style={{ padding: 16, background: 'var(--color-gray-light)', borderRadius: 8, marginBottom: 20 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={advisorConfig.enabled}
+                  onChange={e => handleAdvisorConfigChange('enabled', e.target.checked)}
+                />
+                {t.advisorRemindersEnabled}
+              </label>
+              <div style={{ marginBottom: 12 }}>
+                <span style={{ fontWeight: 600, marginLeft: 8 }}>{t.advisorReminderDays}:</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                  {DAY_OPTIONS.map(d => (
+                    <label key={d.value} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="checkbox"
+                        checked={advisorConfig.days.includes(d.value)}
+                        onChange={() => toggleAdvisorDay(d.value)}
+                      />
+                      {d.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{t.advisorAdviceWindow}:</span>
+                  <select
+                    value={advisorConfig.adviceWindowDays ?? 14}
+                    onChange={e => handleAdvisorConfigChange('adviceWindowDays', parseInt(e.target.value, 10))}
+                    style={{ padding: 6 }}
+                  >
+                    <option value={7}>{t.advisorAdviceWindow7}</option>
+                    <option value={14}>{t.advisorAdviceWindow14}</option>
+                    <option value={21}>{t.advisorAdviceWindow21}</option>
+                    <option value={30}>{t.advisorAdviceWindow30}</option>
+                  </select>
+                </label>
+                <p style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{t.advisorAdviceWindowHint}</p>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 600 }}>{t.advisorReminderTime}:</span>
+                <input
+                  type="time"
+                  value={`${String(advisorConfig.hour).padStart(2, '0')}:${String(advisorConfig.minute).padStart(2, '0')}`}
+                  onChange={e => {
+                    const [h, m] = e.target.value.split(':').map(Number)
+                    const next = { ...advisorConfig, hour: h, minute: m }
+                    setAdvisorConfig(next)
+                    saveAdvisorConfig(next)
+                  }}
+                  style={{ padding: 6 }}
+                />
+                <span style={{ fontSize: 12, color: '#666' }}>IST</span>
+              </label>
+              <p style={{ fontSize: 12, color: '#666', marginTop: 8 }}>{t.advisorRemindersHint}</p>
+            </div>
+          )}
+        </div>
+
         <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '20px' }}>
           <h3 style={{ marginBottom: '15px', fontSize: '18px' }}>{t.addAgeGroup}</h3>
           <div className="form-group" style={{ marginBottom: '15px' }}>
