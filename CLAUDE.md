@@ -23,6 +23,8 @@ Update `MEMORY.md` whenever you make **significant** changes.
 
 **How:** Read MEMORY.md → add/revise relevant section → keep entries concise → update in same session.
 
+**Cursor:** Full rule text is in `.cursor/rules/memory-bank.mdc` (tracked in git so clones keep the same memory-bank behavior).
+
 ---
 
 ## Project Overview

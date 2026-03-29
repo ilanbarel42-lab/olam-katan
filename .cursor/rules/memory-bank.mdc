@@ -1,0 +1,36 @@
+---
+description: Update MEMORY.md when making significant changes to the project
+alwaysApply: true
+---
+
+# Memory Bank Updates
+
+Update `MEMORY.md` whenever you make **significant** changes to this project.
+
+## What Counts as Significant
+
+- **New features or tabs**
+- **Data structure changes** (new fields, changed schema, migration logic)
+- **Storage/backend changes** (new persistence layer, env vars, API)
+- **New important files** or major refactors
+- **Convention or config changes** (build, deploy, naming)
+- **Bug fixes that affect behavior** only if they clarify or correct documented behavior
+
+## What Does Not Require Updates
+
+- Minor UI tweaks (colors, spacing)
+- Typo fixes
+- Refactors that preserve behavior
+- Dependency bumps without behavior change
+
+## How to Update
+
+1. **Read MEMORY.md first** to see the current structure.
+2. Add or revise the relevant section:
+   - **Data Structures** – when fields/schemas change
+   - **Storage Layer** – when persistence changes
+   - **Key Features Implemented** – add new items with a brief description
+   - **Important Files** – add or update entries when files gain/lose responsibility
+   - **Conventions** – when project-wide patterns change
+3. Keep entries concise (1–2 lines each).
+4. Update in the same session as the code change; do not defer.

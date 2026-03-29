@@ -109,6 +109,7 @@ Array of `{ id, type, date, entityType, entityId, description, resolved?, create
 | `.github/workflows/deploy.yml` | Build + StatiCrypt + Pages deploy |
 | `ADVISOR_V2_DESIGN.md` | Plan for free-style recording + LLM Q&A |
 | `CLAUDE.md` | Claude project context (run commands, data structures, conventions) |
+| `.cursor/rules/memory-bank.mdc` | Cursor rule (always apply): when AI must update MEMORY.md; tracked in git |
 
 ---
 
@@ -123,3 +124,4 @@ Array of `{ id, type, date, entityType, entityId, description, resolved?, create
 - Group calc: age at entry date (or today if empty). Next group: age on Sept 1st.
 - Working week: Sunday–Friday. Advisor reminders default: Sun–Thu 17:00 IST.
 - Tabs: children, employees, schedule, advisor, settings (צוות removed).
+- **Memory bank in git** – `.cursor/rules/memory-bank.mdc` is not ignored; clone/pull retains the Cursor memory-bank rule alongside `MEMORY.md`.

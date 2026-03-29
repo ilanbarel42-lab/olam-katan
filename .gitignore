@@ -11,7 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
-.cursor/
+# .cursor: ignore by default; version memory-bank rule for collaborators
+.cursor/*
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/memory-bank.mdc
 .env
 dist/
 bin/
