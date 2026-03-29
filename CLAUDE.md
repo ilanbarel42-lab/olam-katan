@@ -1,6 +1,27 @@
-# Olam Katan – Project Memory Bank
+# Olam Katan – Claude Project Context
 
-Project context and changes for AI assistance. **Maintenance:** `.cursor/rules/memory-bank.mdc` instructs the AI to update this file whenever significant changes are made.
+Project context for coding assistance. Keep this file in sync with project changes.
+
+---
+
+## Quick Start
+
+- **Run dev**: `npm run dev` → http://localhost:3000
+- **Build**: `npm run build`
+- **Preview prod**: `npm run preview`
+- **Config**: `.env.example`; Supabase/Advisor optional
+
+---
+
+## Memory Bank Rule
+
+Update `MEMORY.md` whenever you make **significant** changes.
+
+**Significant:** New features/tabs, data structure changes, storage/backend changes, new important files, convention/config changes, bug fixes that clarify documented behavior.
+
+**Not significant:** Minor UI tweaks, typo fixes, refactors that preserve behavior, dependency bumps.
+
+**How:** Read MEMORY.md → add/revise relevant section → keep entries concise → update in same session.
 
 ---
 
@@ -108,7 +129,6 @@ Array of `{ id, type, date, entityType, entityId, description, resolved?, create
 | `src/components/SettingsTab.jsx` | Age groups, advisor reminders config |
 | `.github/workflows/deploy.yml` | Build + StatiCrypt + Pages deploy |
 | `ADVISOR_V2_DESIGN.md` | Plan for free-style recording + LLM Q&A |
-| `CLAUDE.md` | Claude project context (run commands, data structures, conventions) |
 
 ---
 
